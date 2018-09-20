@@ -56,7 +56,7 @@ Exception in thread "streaming-job-executor-0" java.lang.Error: java.lang.Interr
  bin/kafka-topics.sh --zookeeper ${zk-broker-list}  --create --topic ${topic_name}  --partitions ${partition-num}  --replication-factor ${replication-factor}
 ```
 
-* 修改代码中的 KafkaDirectDemo 
+* 修改代码中的 [KafkaDirectDemo.scala](https://github.com/Kylin1027/spark-streaming-repo/blob/master/src/main/scala/com/spark/aimer/debug/KafkaDirectDemo.scala) 
 
 ```
  val topic = "${set your kafka.topic here}"
@@ -65,7 +65,7 @@ Exception in thread "streaming-job-executor-0" java.lang.Error: java.lang.Interr
 
 ```
 
-* 修改代码中的 KafkaProducr 
+* 修改代码中的 [KafkaProducr.scala](https://github.com/Kylin1027/spark-streaming-repo/blob/master/src/main/scala/com/spark/aimer/debug/KafkaProducer.scala)
 
 ```
 val brokers = "${set your kafka.bootstrap.servrs here}"
