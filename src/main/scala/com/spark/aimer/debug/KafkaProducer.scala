@@ -14,8 +14,8 @@ import org.apache.kafka.common.serialization.StringSerializer
 object KafkaProducer {
 
   def main(args: Array[String]): Unit = {
-    val brokers = "10.99.217.95:8092,10.99.217.101:8092,10.99.199.26:8092,10.99.199.27:8092,10.99.199.25:8092"
-    val topic = "dasou-stream"
+    val brokers = "${set your own kafka.bootstrap.servers here}"
+    val topic = "${set your own topic here}"
     val props = new Properties()
     props.put("metadata.broker.list", brokers)
     props.put("bootstrap.servers", brokers)
@@ -27,6 +27,7 @@ object KafkaProducer {
 
     val kafkaProducer = new KafkaProducer[String, String](props)
 
+    // you can modify this value to control everytime send different number of messages to kafka cluster  
     var total = 100000
     for ( kafka_msg_key <- 1 to total ) {
       val eventJsonObj = new JSONObject()
