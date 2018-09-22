@@ -1,14 +1,13 @@
 package com.spark.aimer.debug
 
-import scala.collection.mutable.ArrayBuffer
-import net.sf.json.JSONObject
+import com.alibaba.fastjson.{JSON, JSONObject}
+
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.IntegerType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
-import org.apache.spark.streaming.kafka010.KafkaUtils
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.streaming.{Milliseconds, Seconds, StreamingContext}
 import org.apache.spark.streaming.kafka010.ConsumerStrategies.Subscribe
@@ -23,27 +22,20 @@ import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
   */
 object KafkaDirectDemo {
 
-  def dataArray(rddStr: String): ArrayBuffer[String] = {
-    val JsonObject = JSONObject.fromObject(rddStr)
-    val data = JsonObject.get("data").toString
+  // we parse the input stream and output the parsed value directly
+  def dataParser(rddStr: String) = {
 
-    val JsonObject1 = JSONObject.fromObject(data)
-    val LINENO: String = JsonObject1.get("LINENO").toString
-    val STATIONID: String = JsonObject1.get("ISUPDOWN").toString
-    val INSTINE: String = JsonObject1.get("INSTINE").toString
-    val UPPASSENGER: String = JsonObject1.get("UPPASSENGER").toString
-    val DOWNPASSENGER: String = JsonObject1.get("DOWNPASSENGER").toString
-    val ISUPDOWN: String = JsonObject1.get("STATIONID").toString
-    val LABELNO: String = JsonObject1.get("LABELNO").toString
-    val array: ArrayBuffer[String] = new ArrayBuffer[String]()
-    array.append(LINENO)
-    array.append(STATIONID)
-    array.append(INSTINE)
-    array.append(UPPASSENGER)
-    array.append(DOWNPASSENGER)
-    array.append(ISUPDOWN)
-    array.append(LABELNO)
-    array
+    val jsonObj = JSON.parseObject(rddStr, classOf[JSONObject]).getJSONObject("data")
+
+    val LINENO = jsonObj.getIntValue("LINENO")
+    val STATIONID = jsonObj.getIntValue("ISUPDOWN")
+    val INSTINE = jsonObj.getString("INSTINE")
+    val UPPASSENGER = jsonObj.getIntValue("UPPASSENGER")
+    val DOWNPASSENGER = jsonObj.getIntValue("DOWNPASSENGER")
+    val ISUPDOWN = jsonObj.getIntValue("STATIONID")
+    val LABELNO = jsonObj.getIntValue("LABELNO")
+
+    (LINENO, STATIONID, INSTINE, UPPASSENGER, DOWNPASSENGER, ISUPDOWN, LABELNO)
   }
 
   def main(args: Array[String]): Unit = {
@@ -101,7 +93,39 @@ object KafkaDirectDemo {
 
     // transfer dstream to dataframe
     var r2 = value.foreachRDD { rdd => {
-      val frame: DataFrame = rdd.map(rdd1 => dataArray(rdd1)).map(r => (r(0), r(1), r(2), r(3), r(4), r(5), r(6))).
+      // here we directly transfer (String) => (Int,String, Int, Int,Int,Int,Int)
+      /**
+        * origin input stream is (key, value, topic, partition, offset)
+        * first step,
+        * we use map to filter other fields like key, topic, partition, offset data, reamin only value
+        *
+        * second step,
+        * we use dataParser to transfer the value content pattern like this
+        *
+        *
+        * {
+        *   "other fields":"other fields value",
+        *   "data":{
+        *      "LINENO":"xxx",
+        *      "ISUPDOWN":"xxx",
+        *      "INSTINE":"xxx",
+        *      "UPPASSENGER":"xxx",
+        *      "DOWNPASSENGER":"xxx",
+        *      "STATIONID":"xxx",
+        *      "LABELNO":"xxx"
+        *   }
+        * }
+        *
+        * to tuple like this
+        * (${LINENO}:Int, ${ISUPDOWN}:Int, ${INSTINE}:String,
+        *  ${UPPASSENGER}:Int, ${DOWNPASSENGER}:Int,
+        *  ${STATIONID}:Int, ${LABELNO}:Int)
+        *
+        * third step,
+        *  we get the DataFrame in which column names are
+        * "LINENO", "ISUPDOWN", "INSTINE", "UPPASSENGER", "DOWNPASSENGER", "STATIONID", "LABELNO"
+        * */
+      val frame: DataFrame = rdd.map(dataParser(_)).
         toDF("LINENO", "ISUPDOWN", "INSTINE", "UPPASSENGER", "DOWNPASSENGER", "STATIONID", "LABELNO")
 
       frame.select(frame("LINENO"), frame("ISUPDOWN").cast(IntegerType),

@@ -3,8 +3,8 @@ package com.spark.aimer.debug
 import java.text.SimpleDateFormat
 import java.util.{Date, Properties}
 
+import com.alibaba.fastjson.JSONObject
 import kafka.serializer.StringEncoder
-import net.sf.json.JSONObject
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.serialization.StringSerializer
 

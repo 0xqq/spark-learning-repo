@@ -9,6 +9,8 @@ import scala.concurrent.duration.Duration
 /**
   * Created by Aimer1027 on 2018/9/20.
   * spark && kafka stream demo
+  *
+  * reference: https://jaceklaskowski.gitbooks.io/spark-structured-streaming/content/spark-sql-streaming-KafkaSourceProvider.html
   */
 object KafkaStructuredStreamApp {
   def main(argsh: Array[String]): Unit = {

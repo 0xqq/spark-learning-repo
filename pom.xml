@@ -11,17 +11,17 @@
     <description>Spark 2.2 Kafka and Spark App Demo</description>
 
     <properties>
-        <scala.version>2.11.8</scala.version>
+        <scala.version>2.11</scala.version>
         <java.version>1.8</java.version>
         <zookeeper.version>3.4.6</zookeeper.version>
     </properties>
 
     <dependencies>
+        <!-- https://mvnrepository.com/artifact/com.alibaba/fastjson -->
         <dependency>
-            <groupId>net.sf.json-lib</groupId>
-            <artifactId>json-lib</artifactId>
-            <version>2.4</version>
-            <classifier>jdk15</classifier>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.49</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-core -->
         <dependency>
@@ -232,15 +232,15 @@
         </plugins>
     </build>
     <repositories>
-    <repository>
-        <id>apache</id>
-        <url>http://repository.apache.org/snapshots</url>
-        <releases>
-            <enabled>false</enabled>
-        </releases>
-        <snapshots>
-            <enabled>false</enabled>
-        </snapshots>
-    </repository>
+        <repository>
+            <id>apache</id>
+            <url>http://repository.apache.org/snapshots</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
     </repositories>
 </project>

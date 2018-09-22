@@ -114,4 +114,23 @@ val topic = "${set your kafka topic here}"
 	./kafka-streaming-1.0-SNAPSHOT-jar-with-dependencies.jar   & 
 ```
 
+## 问题进展
+### 通过 Structured Streaming 来实现原有逻辑
+* 新增代码 [KafkaStructuredSolution1]() 其中为 SparkStreaming 中逻辑实现(在原有代码 '加油' 作者基础上做了些调整与优化)
+* 优化原有数据字段解析, 考虑到原有 ``` json-lib-jdk15 ``` 在 spark-shell 环境下执行时会因为缺少一些列的库而报异常,如
+   ```
+   java.lang.NoClassDefFoundError: net/sf/ezmorph/Morpher
+   ```
+   而使用 alibaba fastjson 
+
+* 新增了 worksheets 路径文件夹, 其中会将实验中测试 API 使用方法的 demo 加入    
+   
+* 目前整个代码逻辑通过 linux 本地模式启动 spark-shell 可正常运行， spark-shell 启动命令如下
+    ```
+     ./bin/spark-shell  --master local[*] --jars ./jars/fastjson-1.2.49.jar  
+    ```
+    在这里需要通过 --jars 将 fastjson 引入到 spark-shell 上下文执行环境中,否则运行 import 语句的时候会报 
+    ``` class not found ``` 的关异常
+* 目前尚未编译生成 jar 包, 后续会针对该算子进行 jvm 各项压测,及运行时长是否卡死等各方面后与 spark-streaming 进行对比
+ 
 # END
