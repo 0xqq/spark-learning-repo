@@ -41,6 +41,8 @@ import org.apache.spark.sql.streaming.{OutputMode, Trigger}
   *    so we can use the writeStream && trigger to compute and generate the results periodically
   *
   * Not test in spark-shell yet, some logic needs to modify
+  *
+  * References: https://stackoverflow.com/questions/46603430/spark-structured-streaming-how-to-deduplicate-by-latest-and-aggregate-count
   */
 object KafkaStructuredSolution2 {
 
@@ -89,7 +91,7 @@ object KafkaStructuredSolution2 {
 
   def main(args: Array[String]): Unit = {
     val topic = "dasou-stream"
-    val brokers = "10.99.217.95:8092,10.99.217.101:8092,10.99.199.26:8092,10.99.199.27:8092,10.99.199.25:8092"
+    val brokers = "${kafka.bootstrap.servers}"
     val groupId = "kafka-groupId-aimer-20180922"
 
     // here we build the instance of SparkSession
