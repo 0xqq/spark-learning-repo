@@ -116,7 +116,7 @@ val topic = "${set your kafka topic here}"
 
 ## 问题进展
 ### 通过 Structured Streaming 来实现原有逻辑
-* 新增代码 [KafkaStructuredSolution1]() 其中为 SparkStreaming 中逻辑实现(在原有代码 '加油' 作者基础上做了些调整与优化)
+* 新增代码 [KafkaStructuredSolution1](https://github.com/Kylin1027/spark-streaming-repo/blob/master/src/main/scala/com/spark/aimer/structured/KafkaStructuredSolution1.scala) 其中为 SparkStreaming 中逻辑实现(在原有代码 '加油' 作者基础上做了些调整与优化)
 * 优化原有数据字段解析, 考虑到原有 ``` json-lib-jdk15 ``` 在 spark-shell 环境下执行时会因为缺少一些列的库而报异常,如
    ```
    java.lang.NoClassDefFoundError: net/sf/ezmorph/Morpher
