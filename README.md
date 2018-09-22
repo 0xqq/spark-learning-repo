@@ -133,4 +133,11 @@ val topic = "${set your kafka topic here}"
     ``` class not found ``` 的关异常
 * 目前尚未编译生成 jar 包, 后续会针对该算子进行 jvm 各项压测,及运行时长是否卡死等各方面后与 spark-streaming 进行对比
  
+
+## 尚不明确的问题有
+* Structured Streaming 与 Spark Streaming 清理内存空间策略
+* 导致 Spark Streaming SQL 执行期间内存打满究竟是由 RDD lineage 依赖过长, 
+  还是由 Spark SQL 执行 JOIN 操作时内存分配和回收的策略影响导致
+* 为何 Spark Streaming 中通过 unpersist 和 remember 来提高 MetaData 清理频率最后还是因为内存耗光而卡死  
+
 # END
