@@ -92,7 +92,7 @@ object KafkaDirectDemo {
     val value: DStream[String] = stream.map(r => r.value())
 
     // transfer dstream to dataframe
-    var r2 = value.foreachRDD { rdd => {
+    value.foreachRDD { rdd => {
       // here we directly transfer (String) => (Int,String, Int, Int,Int,Int,Int)
       /**
         * origin input stream is (key, value, topic, partition, offset)

@@ -1,5 +1,12 @@
 package com.spark.aimer.debug.compare
 
+import java.sql.Timestamp
+
+import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
+import org.apache.spark.streaming.dstream.DStream
+import org.apache.spark.streaming.{Milliseconds, Seconds, StreamingContext}
+import org.apache.spark.{SparkConf, SparkContext}
+
 /**
   * Created by Aimer1027 on 2018/9/18.
   *
@@ -95,22 +102,74 @@ package com.spark.aimer.debug.compare
   *      score:Int,
   *      timestamp:java.sql.Timestamp
   *  )
+  *
   *  Referencing : 《Spark SQL 内核剖析》 第七章 Spark SQL 之 Aggregation
   *  Page: [108 - 111]
+  *
+  *  And we do not create checkpoint for convenience ~
   */
-
 
 
 object SparkStreamingImplement {
 
 
-  case class MyStudentItem(gradeID:Long, classID:Long, studentID:Long, timestamp:java.sql.Timestamp)
+  def csvDataParser(rdd:String) = {
+    val lines = rdd.trim.split(",")
+    if ( lines.length < 5 ) Nil
+
+    val gradeID = lines(0).toLong
+    val classID = lines(1).toLong
+    val studentID = lines(2).toLong
+    val score   = lines(3).toInt
+    val timestamp= Timestamp.valueOf(lines(4).toString)
+
+    (gradeID, classID, studentID, score, timestamp)
+  }
 
 
   def main( args:Array[String] ) = {
 
-    
+    // here we set time interval
+    val myBatchInterval:Int = 20
+
+    val conf = new SparkConf().setAppName("SparkStreamingImpl")
+
+    conf.set("spark.streaming.stopGracefullyOnShutdown", "true")
+
+    conf.set("spark.streaming.unpersist", "true")
 
 
+    // build SparkContext
+    val sc = new SparkContext(conf)
+
+    // build StreamingContext
+    val ssc = new StreamingContext(sc, Seconds(myBatchInterval))
+    ssc.remember(Milliseconds(10))
+
+    val stuCsvStrStream:DStream[String] = ssc.textFileStream("/home/work/aimer/spark-2.2-x/app_streaming_structured/dataset/student.csv")
+
+    stuCsvStrStream.foreachRDD { rdd => {
+      val sqlContext = SparkSession.builder.config(rdd.sparkContext.getConf).getOrCreate()
+      import sqlContext.implicits._
+      val df:DataFrame = rdd.map(csvDataParser).toDF("gradeID", "classID", "studentID", "score", "timestamp")
+      val tempViewName = "AimerTestView"
+
+      df.createOrReplaceTempView(tempViewName)
+
+      val sqlCmd =
+        s"""
+          | SELECT * FROM ${tempViewName}
+        """.stripMargin
+
+
+      val df2 = sqlContext.sql(sqlCmd)
+
+      println(s"get df2 = ${df2.show()}")
+
+    }
+    }
+
+    ssc.start()
+    ssc.awaitTermination()
   }
 }
