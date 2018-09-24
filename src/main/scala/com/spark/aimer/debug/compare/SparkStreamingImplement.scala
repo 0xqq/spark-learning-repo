@@ -192,16 +192,29 @@ object SparkStreamingImplement {
 
       // select *, row_number() over (partition by key-1, key-2 order by key-4 desc) as ranking from ${temp_view_name}
 
-      val innerSQL =
+      /*val innerSQL =
         s"""
-          | select *, row_number() over ( partition by gradeID, classID order by timestamp desc ) as ranking from AimerTestView
+          | select *, row_number() over ( partition by gradeID, classID order by timestamp desc ) as ranking
+          | from ${tempViewName}
         """.stripMargin
-
 
       val innerDF = sqlContext.sql(innerSQL)
 
-      println(s"get innerDF = ${innerDF.show()}")
+      println(s"get innerDF = ${innerDF.show()}")*/
 
+      val completeSQL =
+        s"""
+          | SELECT gradeID, classID, studentID, score, timestamp
+          | FROM (
+          |     select *, row_number() over ( partition by gradeID, classID, studentID order by timestamp desc ) as ranking
+          |     from ${tempViewName}
+          | ) WHERE ranking = 1
+        """.stripMargin
+
+      val completeSQLDF =   sqlContext.sql(completeSQL)
+
+      println("Ok, here we gonna print all the result on console")
+      completeSQLDF.show(false)
     }
     }
 
