@@ -41,7 +41,7 @@ object StuDataKafkaProducer {
 
       kafkaProducer.send(new ProducerRecord[String, String](topic, s"${kafka_msg_key}", dataStr),
         new KafkaProducerCallBack())
-      Thread.sleep(100)
+      Thread.sleep(1000)
       println(s"send data count = ${kafka_msg_key} to topic = ${topic}")
     }
 
@@ -64,15 +64,15 @@ object StuDataKafkaProducer {
 
 
     // here is the gradeID for student
-    // gradeID: from 1 to  6, not contain 0
+    // gradeID: from 1 to  2, not contain 0
     def gradeID():String = {
-       getRandomFrom0(6, false)
+       getRandomFrom0(2, false)
     }
 
     // here is the classID for student
-    // classID: {1-4}
+    // classID: {1-3}
     def classID():String = {
-      s"${getRandomFrom0(9, false)}"
+      s"${getRandomFrom0(3, false)}"
     }
 
     // here is the studentID for student

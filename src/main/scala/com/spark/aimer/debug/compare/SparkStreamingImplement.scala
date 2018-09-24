@@ -190,6 +190,10 @@ object SparkStreamingImplement {
 
       df.createOrReplaceTempView(tempViewName)
 
+      println ("\n\n====================================================")
+      println ("========================[input df]============================")
+      df.show(df.count().toInt)
+
       // select *, row_number() over (partition by key-1, key-2 order by key-4 desc) as ranking from ${temp_view_name}
 
       /*val innerSQL =
@@ -202,11 +206,13 @@ object SparkStreamingImplement {
 
       println(s"get innerDF = ${innerDF.show()}")*/
 
+      println ("++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
       val completeSQL =
         s"""
           | SELECT gradeID, classID, studentID, score, timestamp
           | FROM (
-          |     select *, row_number() over ( partition by gradeID, classID, studentID order by timestamp desc ) as ranking
+          |     select *, row_number() over ( partition by gradeID, classID order by timestamp desc ) as ranking
           |     from ${tempViewName}
           | ) WHERE ranking = 1
         """.stripMargin
@@ -215,6 +221,8 @@ object SparkStreamingImplement {
 
       println("Ok, here we gonna print all the result on console")
       completeSQLDF.show(completeSQLDF.count().toInt)
+      println ("======================[resultdf]==============================")
+      println ("====================================================\n\n")
     }
     }
 
