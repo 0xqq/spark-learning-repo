@@ -214,7 +214,7 @@ object SparkStreamingImplement {
       val completeSQLDF =   sqlContext.sql(completeSQL)
 
       println("Ok, here we gonna print all the result on console")
-      completeSQLDF.show(false)
+      completeSQLDF.show(completeSQLDF.count().toInt)
     }
     }
 
