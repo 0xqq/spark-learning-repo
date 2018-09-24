@@ -151,20 +151,23 @@ object SparkStreamingImplement {
     stuCsvStrStream.foreachRDD { rdd => {
       val sqlContext = SparkSession.builder.config(rdd.sparkContext.getConf).getOrCreate()
       import sqlContext.implicits._
-      val df:DataFrame = rdd.map(csvDataParser).toDF("gradeID", "classID", "studentID", "score", "timestamp")
+      val df:DataFrame = rdd.map(csvDataParser).filter(item => item == Nil).toDF("gradeID", "classID", "studentID", "score", "timestamp")
       val tempViewName = "AimerTestView"
 
       df.createOrReplaceTempView(tempViewName)
 
-      val sqlCmd =
+      // select *, row_number over (partition by key-1, key-2 order by key-4 desc) as ranking from ${temp_view_name}
+
+      val innerSQL =
         s"""
-          | SELECT * FROM ${tempViewName}
+          | select *, row_number over ( partition by gradeID, classID order by timestamp desc )
+          | as ranking from ${tempViewName}
         """.stripMargin
 
 
-      val df2 = sqlContext.sql(sqlCmd)
+      val innerDF = sqlContext.sql(innerSQL)
 
-      println(s"get df2 = ${df2.show()}")
+      println(s"get innerDF = ${innerDF.show()}")
 
     }
     }
