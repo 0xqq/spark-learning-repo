@@ -148,6 +148,9 @@ object SparkStreamingImplement {
 
     val stuCsvStrStream:DStream[String] = ssc.textFileStream("file:///home/work/aimer/spark-2.2-x/app_streaming_structured/dataset/student.csv")
 
+    println(s"read in csv file lines = ${stuCsvStrStream.count()}")
+
+
     stuCsvStrStream.foreachRDD { rdd => {
       val sqlContext = SparkSession.builder.config(rdd.sparkContext.getConf).getOrCreate()
       import sqlContext.implicits._
