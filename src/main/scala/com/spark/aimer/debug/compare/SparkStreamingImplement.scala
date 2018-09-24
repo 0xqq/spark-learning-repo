@@ -12,7 +12,7 @@ import org.apache.spark.{SparkConf, SparkContext}
   *
   * In this class(object) we will re-appear this grouping by SQL semantics :
   * select key-1, key-2, key-3, key-4 from (
-  *   select *, row_number over (partition by key-1, key-2 order by key-4 desc) as ranking from ${temp_view_name}
+  *   select *, row_number() over (partition by key-1, key-2 order by key-4 desc) as ranking from ${temp_view_name}
   * ) where ranking = 1 ;
   *
   *
@@ -22,7 +22,7 @@ import org.apache.spark.{SparkConf, SparkContext}
   *    then, we create a temp view over it with the name of ${temp_view_name}
   *
   * 2. And we execute an inner SQL:
-  *    select *, row_number over (partition by key-1, key-2 order by key-4 desc) as ranking from ${temp_view_name}
+  *    select *, row_number() over (partition by key-1, key-2 order by key-4 desc) as ranking from ${temp_view_name}
   *
   *    In step2
   *    2.1 We first partition the ${temp_view_name} into groups in which the value of ${key-1} ${key-2} should be the same
@@ -121,7 +121,7 @@ object SparkStreamingImplement {
     val classID = lines(1).toLong
     val studentID = lines(2).toLong
     val score   = lines(3).toInt
-    val timestamp= Timestamp.valueOf(lines(4).toString)
+    val timestamp = Timestamp.valueOf(lines(4).toString)
 
     (gradeID, classID, studentID, score, timestamp)
   }
@@ -146,7 +146,7 @@ object SparkStreamingImplement {
     val ssc = new StreamingContext(sc, Seconds(myBatchInterval))
     ssc.remember(Milliseconds(10))
 
-    val stuCsvStrStream:DStream[String] = ssc.textFileStream("/home/work/aimer/spark-2.2-x/app_streaming_structured/dataset/student.csv")
+    val stuCsvStrStream:DStream[String] = ssc.textFileStream("file:///home/work/aimer/spark-2.2-x/app_streaming_structured/dataset/student.csv")
 
     stuCsvStrStream.foreachRDD { rdd => {
       val sqlContext = SparkSession.builder.config(rdd.sparkContext.getConf).getOrCreate()
@@ -154,14 +154,15 @@ object SparkStreamingImplement {
       val df:DataFrame = rdd.map(csvDataParser).filter(item => item == Nil).toDF("gradeID", "classID", "studentID", "score", "timestamp")
       val tempViewName = "AimerTestView"
 
+      df.printSchema()
+
       df.createOrReplaceTempView(tempViewName)
 
-      // select *, row_number over (partition by key-1, key-2 order by key-4 desc) as ranking from ${temp_view_name}
+      // select *, row_number() over (partition by key-1, key-2 order by key-4 desc) as ranking from ${temp_view_name}
 
       val innerSQL =
         s"""
-          | select *, row_number over ( partition by gradeID, classID order by timestamp desc )
-          | as ranking from ${tempViewName}
+          | select *, row_number() over ( partition by gradeID, classID order by timestamp desc ) as ranking from AimerTestView
         """.stripMargin
 
 
