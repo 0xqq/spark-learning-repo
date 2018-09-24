@@ -2,8 +2,13 @@ package com.spark.aimer.debug.compare
 
 import java.sql.Timestamp
 
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
-import org.apache.spark.streaming.dstream.DStream
+import org.apache.spark.streaming.dstream.{DStream, InputDStream}
+import org.apache.spark.streaming.kafka010.ConsumerStrategies.Subscribe
+import org.apache.spark.streaming.kafka010.KafkaUtils
+import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
 import org.apache.spark.streaming.{Milliseconds, Seconds, StreamingContext}
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -87,12 +92,6 @@ import org.apache.spark.{SparkConf, SparkContext}
   *             -------------------------------------------
   *
   *
-  *
-  *
-  *  In this implementation I will use the csv as upstream input stream instead of kafka streaming which in which
-  *  you have to handle the kafka producer and extracting the data contents from the data body.
-  *
-  *
   *  And here is the schema of the input csv data
   *  case class MyStudentItem
   *  (
@@ -129,6 +128,11 @@ object SparkStreamingImplement {
 
   def main( args:Array[String] ) = {
 
+    val topic = "${set your kafka topic here}"
+    val brokers = "${set your kafka.bootstrap.servers here }"
+    val group = "${set your group.id here}"
+
+
     // here we set time interval
     val myBatchInterval:Int = 20
 
@@ -146,15 +150,40 @@ object SparkStreamingImplement {
     val ssc = new StreamingContext(sc, Seconds(myBatchInterval))
     ssc.remember(Milliseconds(10))
 
-    val stuCsvStrStream:DStream[String] = ssc.textFileStream("file:///home/work/aimer/spark-2.2-x/app_streaming_structured/dataset/student.csv")
 
-    println(s"read in csv file lines = ${stuCsvStrStream.count()}")
 
+    // set kafka params
+    val kafkaParams = Map[String, Object](
+      "bootstrap.servers" -> brokers,
+      "key.deserializer" -> classOf[StringDeserializer],
+      "value.deserializer" -> classOf[StringDeserializer],
+      "group.id" -> group,
+      "auto.offset.reset" -> "latest",
+      "enable.auto.commit" -> (false: java.lang.Boolean)
+    )
+
+    // set kafka topic for which the stream consume from
+    val topics = Set(topic)
+
+
+    // build data stream from kafka to streaming context
+    val stream: InputDStream[ConsumerRecord[String, String]] = KafkaUtils.createDirectStream[String, String](
+      ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams))
+
+
+    // stream's structure is key, value and some metadata, we use map to get the value from InputDStream
+
+    val stuCsvStrStream:DStream[String] = stream.map(r => r.value())
 
     stuCsvStrStream.foreachRDD { rdd => {
       val sqlContext = SparkSession.builder.config(rdd.sparkContext.getConf).getOrCreate()
+
       import sqlContext.implicits._
-      val df:DataFrame = rdd.map(csvDataParser).filter(item => item == Nil).toDF("gradeID", "classID", "studentID", "score", "timestamp")
+
+      val df:DataFrame = rdd.map(csvDataParser).
+        filter(item => item == Nil).
+        toDF("gradeID", "classID", "studentID", "score", "timestamp")
+
       val tempViewName = "AimerTestView"
 
       df.printSchema()
