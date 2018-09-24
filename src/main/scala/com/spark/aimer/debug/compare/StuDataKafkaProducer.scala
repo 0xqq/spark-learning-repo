@@ -64,9 +64,9 @@ object StuDataKafkaProducer {
 
 
     // here is the gradeID for student
-    // gradeID: from 1 to  2, not contain 0
+    // gradeID: only {2} will be return
     def gradeID():String = {
-       getRandomFrom0(2, false)
+       "2"
     }
 
     // here is the classID for student

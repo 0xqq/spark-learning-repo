@@ -210,11 +210,11 @@ object SparkStreamingImplement {
 
       val completeSQL =
         s"""
-          | SELECT gradeID, classID, studentID, score, timestamp
+          | SELECT gradeID, classID, studentID, score, timestamp, ranking
           | FROM (
           |     select *, row_number() over ( partition by gradeID, classID order by timestamp desc ) as ranking
           |     from ${tempViewName}
-          | ) WHERE ranking = 1
+          | ) WHERE ranking <= 2
         """.stripMargin
 
       val completeSQLDF =   sqlContext.sql(completeSQL)
