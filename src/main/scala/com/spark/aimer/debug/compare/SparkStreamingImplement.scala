@@ -181,7 +181,7 @@ object SparkStreamingImplement {
       import sqlContext.implicits._
 
       val df:DataFrame = rdd.map(csvDataParser).
-        filter(item => item == Nil).
+        filter(item => item != Nil).
         toDF("gradeID", "classID", "studentID", "score", "timestamp")
 
       val tempViewName = "AimerTestView"
