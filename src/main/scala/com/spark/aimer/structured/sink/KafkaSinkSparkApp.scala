@@ -10,7 +10,7 @@ import com.alibaba.fastjson.{JSON, JSONObject}
 /**
   * Created by Aimer1027 on 2018/9/27.
   *
-  * reference:
+  * reference:http://spark.apache.org/docs/2.3.0/structured-streaming-kafka-integration.html
   */
 
 object KafkaSinkSparkApp {
