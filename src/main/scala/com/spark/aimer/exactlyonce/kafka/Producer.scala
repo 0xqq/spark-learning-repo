@@ -17,7 +17,7 @@ object Producer {
 
   def main(args: Array[String]): Unit = {
     val brokers = ""
-    val topic = "dasou-stream"
+    val topic = "dasou-in"
     val props = new Properties()
     props.put("metadata.broker.list", brokers)
     props.put("bootstrap.servers", brokers)
@@ -25,7 +25,7 @@ object Producer {
     props.put("request.required.acks", "1")
     props.put("key.serializer", classOf[StringSerializer])
     props.put("value.serializer", classOf[StringSerializer])
-    props.put("partitioner.class", classOf[com.spark.aimer.exactlyonce.kafka.HashPartitioner])
+    props.put("partitioner.class", classOf[com.spark.aimer.exactlyonce.kafka.MyHashPartitioner])
 
     val kafkaProducer = new KafkaProducer[String, String](props)
     var id: Int = 1

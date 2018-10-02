@@ -48,8 +48,10 @@ object ZkPartitionOffsetHandler {
 
   def updateRangeOffset(offsetRange: OffsetRange) = {
     ZkUtil.conn(zkBrokerList, sessionTimeout)
+    println("[ZkPartitionOffsetHandler] [updateRangeOffsets] [begin]")
     ZkUtil.update(s"${zkRootPath}/${offsetRange.topic}/${offsetRange.partition}",
       ZkPartitionOffsetParser.fromOffsetRange(offsetRange))
+    println("[ZkPartitionOffsetHandler] [updateRangeOffsets] [end]")
     ZkUtil.close
   }
 
@@ -79,19 +81,22 @@ object ZkPartitionOffsetHandler {
 
   def addTopicPartitionNum(topic: String, partitionNum: Int) = {
     val path = s"${zkRootPath}/${topic}"
-
     ZkUtil.conn(zkBrokerList, sessionTimeout)
     val jsonObj: JSONObject = new JSONObject
     jsonObj.put("topic", topic)
     jsonObj.put("partitionNum", partitionNum)
     if (ZkUtil.isPathExsits(path)) {
+      println(s"[ZkPartitionOffsetHandler] path=${path} already exists")
       ZkUtil.update(path, jsonObj.toString)
     } else {
-
+      println(s"[ZkPartitionOffsetHandler] path=${path} does not exist")
       ZkUtil.create(path, jsonObj.toString)
       for (partitinId: Int <- 0 until partitionNum) {
         val rangeOffset: OffsetRange = OffsetRange.create(topic, partitinId, 0, 0)
-        addRangeOffset(rangeOffset)
+        println(s"build path for ${path}/${rangeOffset.partition}" +
+          s" with data=${ZkPartitionOffsetParser.fromOffsetRange(rangeOffset)}")
+        ZkUtil.create(s"${zkRootPath}/${rangeOffset.topic}/${rangeOffset.partition}",
+          ZkPartitionOffsetParser.fromOffsetRange(rangeOffset))
       }
     }
     ZkUtil.close

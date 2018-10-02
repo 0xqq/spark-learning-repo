@@ -8,8 +8,10 @@ import org.apache.kafka.common.Cluster
 /**
   * Created by Aimer1027 on 2018/9/30.
   */
-class HashPartitioner extends Partitioner {
-  override def close(): Unit = ???
+class MyHashPartitioner extends Partitioner {
+  override def close(): Unit = {
+
+  }
 
   override def partition(topic: String, key: scala.Any, keyBytes: Array[Byte],
                          value: scala.Any, valueBytes: Array[Byte],
@@ -22,5 +24,7 @@ class HashPartitioner extends Partitioner {
     }
   }
 
-  override def configure(map: util.Map[String, _]): Unit = ???
+  override def configure(map: util.Map[String, _]): Unit = {
+
+  }
 }

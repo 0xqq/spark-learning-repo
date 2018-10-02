@@ -1,18 +1,17 @@
 package com.spark.aimer.exactlyonce.streaming
 
-import java.util.concurrent.TimeUnit
-
 import com.alibaba.fastjson.{JSON, JSONObject}
 import com.spark.aimer.exactlyonce.kafka.Producer.KafkaMsgBean
 import com.spark.aimer.exactlyonce.zk.{ZkPartitionOffsetHandler, ZkPartitionOffsetParser}
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.spark.streaming.{Duration, Milliseconds, Seconds, StreamingContext}
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
-import org.apache.spark.{SparkConf, SparkContext, TaskContext}
 import org.apache.spark.streaming.kafka010.ConsumerStrategies.Subscribe
-import org.apache.spark.streaming.kafka010.{HasOffsetRanges, KafkaUtils, OffsetRange}
 import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
+import org.apache.spark.streaming.kafka010.{HasOffsetRanges, KafkaUtils, OffsetRange}
+import org.apache.spark.streaming.{Duration, Seconds, StreamingContext}
+import org.apache.spark.{SparkConf, SparkContext, TaskContext}
 
 /**
   * Created by Aimer1027 on 2018/10/1.
@@ -21,16 +20,15 @@ object ExactlyKafkaSparkStreamingApp {
 
   val zkHandler = ZkPartitionOffsetHandler
 
-
   /**
     * User's implements this method as service logic
     *
     **/
-  def serviceLogicOp(stream: DStream[String]) = {
+  def serviceLogicOp(streamLines: DStream[String]) = {
     // here we do service level operations
     // 1. calculate the step by step either by SQLContext sqls or RDD directly transforms && actions
     // 2. save/sync results to external storages like redis/kafka/hdfs/hbase/es by different apis
-    val streamRDD = stream.window(new Duration(60 * 1000)).map(item => {
+    val resultRDD = streamLines.window(new Duration(60 * 1000)).map(item => {
       val jsonObj: JSONObject = JSON.parseObject(item, classOf[JSONObject])
       var bean: KafkaMsgBean = new KafkaMsgBean(jsonObj.getString("id"),
         jsonObj.getString("msg"), jsonObj.getString("timestamp"))
@@ -43,9 +41,8 @@ object ExactlyKafkaSparkStreamingApp {
       val timestampValue: String = item._1
       val durationRecordCount: Int = item._2.size
       (timestampValue, durationRecordCount)
-    }).foreachRDD( rdd => {
-      rdd.saveAsTextFile(s"/hdfs/path/${rdd.id}")
     })
+    resultRDD
   }
 
 
@@ -62,11 +59,15 @@ object ExactlyKafkaSparkStreamingApp {
     var topicPartition = Map[TopicPartition, Long]()
     for (topicName: String <- topicPartitionNumMap.keySet) {
       val partitionNum: Int = topicPartitionNumMap.get(topicName).get
-      if (zkHandler.isTopicCached(topicName)) {
+      if (!zkHandler.isTopicCached(topicName)) {
+        println(s"begin add path for topic =${topicName} with partitonNum=${partitionNum}")
         zkHandler.addTopicPartitionNum(topicName, partitionNum)
       }
-      val offsetRange: OffsetRange = zkHandler.readRangeOffset(topicName, partitionNum)
-      topicPartition += (offsetRange.topicPartition() -> offsetRange.count())
+      for (partitionId: Int <- 0 until partitionNum) {
+        val offsetRange: OffsetRange = zkHandler.readRangeOffset(topicName, partitionId)
+        topicPartition += (offsetRange.topicPartition() -> offsetRange.count())
+        println(s"[topic]=${topicName},[partitionId]=${partitionId},[offset]=${offsetRange.count()}")
+      }
     }
     topicPartition
   }
@@ -83,7 +84,9 @@ object ExactlyKafkaSparkStreamingApp {
     *                    5. count: untilOffset - fromOffset
     **/
   def syncRangeOffsetToExternalStorage(offsetRange: OffsetRange) = {
-    zkHandler.addRangeOffset(offsetRange)
+    println(s"[syncRangeOffsetToExternalStorage]," +
+      s"[OffsetRange]=${ZkPartitionOffsetParser.fromOffsetRange(offsetRange)}")
+    zkHandler.updateRangeOffset(offsetRange)
   }
 
   /**
@@ -94,10 +97,8 @@ object ExactlyKafkaSparkStreamingApp {
     * @param topicPartition key:topic name , value: how many partitions in total in this topic
     * @return DStream[String] the data stream from kafka to Spark StreamingContext
     **/
-  def kafkaDStreamInit(ssc: StreamingContext, topicPartition: Map[String, Int],
-                       loadCache: Boolean): DStream[String] = {
-
-    val brokers = ""
+  def kafkaDStreamInit(ssc: StreamingContext, brokers: String, topicPartition: Map[String, Int],
+                       loadCache: Boolean): InputDStream[ConsumerRecord[String, String]] = {
     val group = "aimer-kafka-streaming-exactly-once"
     val topics = topicPartition.keySet
     val kafkaParams = Map[String, Object](
@@ -108,18 +109,16 @@ object ExactlyKafkaSparkStreamingApp {
       "auto.offset.reset" -> "latest",
       "enable.auto.commit" -> (false: java.lang.Boolean)
     )
-
-    val stream: DStream[String] = loadCache match {
+    val stream = loadCache match {
       case true =>
         KafkaUtils.createDirectStream[String, String](
           ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams,
             loadRangeOffsetFromExternal(topicPartition))
-        ).map(_.value())
-
+        )
       case false =>
         KafkaUtils.createDirectStream[String, String](
           ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams)
-        ).map(_.value())
+        )
     }
     stream
   }
@@ -132,12 +131,10 @@ object ExactlyKafkaSparkStreamingApp {
     *
     * @param stream DStream[String] the data streaming from kafka to Spark StreamingContext
     **/
-  def kafkaDStreamCommit(stream: DStream[String]) = {
+  def kafkaDStreamCommit(stream: InputDStream[ConsumerRecord[String, String]]) = {
     stream.foreachRDD { eachRDD =>
-
       // first , we get the array of OffsetRange by calling eachRDD's
       val offsetRangeArray: Array[OffsetRange] = eachRDD.asInstanceOf[HasOffsetRanges].offsetRanges
-
       eachRDD.foreachPartition { eachRDDPartitionIter =>
         val partitionId = TaskContext.getPartitionId
         val offsetRangeByPartition: OffsetRange = offsetRangeArray(partitionId)
@@ -149,7 +146,7 @@ object ExactlyKafkaSparkStreamingApp {
   def main(args: Array[String]) = {
 
     val batchInterval: Int = 10
-
+    val brokers: String = ""
     val conf = new SparkConf().setAppName("KafkaSparkStreamingExactlyOnceApp")
 
     // here we set the task only fail once , in case of stage and job retry
@@ -165,12 +162,76 @@ object ExactlyKafkaSparkStreamingApp {
     var topicPartitonNum: Map[String, Int] = Map()
     topicPartitonNum += ("dasou-in" -> 5)
 
-    val streaming: DStream[String] = kafkaDStreamInit(ssc, topicPartitonNum, false)
+    println("[build] [KfakaDStreamInit] [begin]")
+    val stream: InputDStream[ConsumerRecord[String, String]] = kafkaDStreamInit(ssc, brokers, topicPartitonNum, true)
+    println("[build] [KfakaDStreamInit] [end]")
 
-    serviceLogicOp(streaming)
 
-    kafkaDStreamCommit(streaming)
+    //======serviceLogicOp(stream)
+    println("[build] [streamLines] [begin]")
+    val streamLines = stream.map(_.value)
+    val resultRDD = serviceLogicOp(streamLines)
+    println("[build] [streamLines] [end]")
+    //======serviceLogicOp(stream)
 
-    ssc.stop(false, true)
+    //=========== kafkaDStreamCommit(stream)
+    println("[begin] [commit] kafkaDStream offset")
+    kafkaDStreamCommit(stream)
+    println("[end] [commit] kafkaDStream offset")
+    //=========== kafkaDStreamCommit(stream)
+
+    val hdfsPath: String = "/app/business/haichuan/cbc/aimer/results"
+    println(s"[begin] [saveAsTextFiles] =${hdfsPath}")
+    resultRDD.saveAsTextFiles(s"${hdfsPath}")
+    println(s"[end] [saveAsTextFiles]=${hdfsPath}")
+    ssc.start()
+    ssc.awaitTermination()
+    /** *
+      * nohup.out :
+      * 18/10/03 00:29:22 INFO Executor: Running task 1.0 in stage 1.0 (TID 6)
+      * 18/10/03 00:29:22 INFO Executor: Running task 0.0 in stage 1.0 (TID 5)
+      * 18/10/03 00:29:22 INFO Executor: Running task 3.0 in stage 1.0 (TID 8)
+      * 18/10/03 00:29:22 INFO Executor: Running task 4.0 in stage 1.0 (TID 9)
+      * 18/10/03 00:29:22 INFO Executor: Running task 2.0 in stage 1.0 (TID 7)
+      * 18/10/03 00:29:22 INFO KafkaRDD: Computing topic dasou-in, partition 1 offsets 1195 -> 33409
+      * 18/10/03 00:29:22 INFO KafkaRDD: Computing topic dasou-in, partition 3 offsets 1191 -> 33403
+      * 18/10/03 00:29:22 INFO KafkaRDD: Computing topic dasou-in, partition 2 offsets 1195 -> 33408
+      * 18/10/03 00:29:22 INFO KafkaRDD: Computing topic dasou-in, partition 0 offsets 1196 -> 33410
+      * 18/10/03 00:29:22 INFO KafkaRDD: Computing topic dasou-in, partition 4 offsets 1196 -> 33411
+      *
+      */
+    /**
+      * zk cache1:
+      * get /aimer/spark/kafka/dasou-in/2
+      * {"partition":2,"topic":"dasou-in","untilOffset":1195,"fromOffset":0}
+      * cZxid = 0x40000146a
+      * ctime = Tue Oct 02 21:27:36 CST 2018
+      * mZxid = 0x4000014e3
+      * mtime = Tue Oct 02 22:59:22 CST 2018
+      * pZxid = 0x40000146a
+      * cversion = 0
+      * dataVersion = 1
+      * aclVersion = 0
+      * ephemeralOwner = 0x0
+      * dataLength = 68
+      * numChildren = 0
+      *
+      * zk cache2:
+      * get /aimer/spark/kafka/dasou-in/2
+      * {"partition":2,"topic":"dasou-in","untilOffset":33408,"fromOffset":1195}
+      * cZxid = 0x40000146a
+      * ctime = Tue Oct 02 21:27:36 CST 2018
+      * mZxid = 0x40000153d
+      * mtime = Wed Oct 03 00:29:21 CST 2018
+      * pZxid = 0x40000146a
+      * cversion = 0
+      * dataVersion = 2
+      * aclVersion = 0
+      * ephemeralOwner = 0x0
+      * dataLength = 72
+      * numChildren = 0
+      **/
+
+    // ssc.stop(false, true)
   }
 }

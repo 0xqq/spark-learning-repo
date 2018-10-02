@@ -59,7 +59,7 @@ object ZkUtil {
       case null => false
       case _ => true
     }
-    println(s"[ZkUtil] [exists] [path]=${path} done")
+    println(s"[ZkUtil] [exists] [path]=${path} exists=${isExists}one")
     isExists
   }
 
