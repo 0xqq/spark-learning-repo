@@ -30,19 +30,22 @@ object ExactlyKafkaSparkStreamingApp {
     // here we do service level operations
     // 1. calculate the step by step either by SQLContext sqls or RDD directly transforms && actions
     // 2. save/sync results to external storages like redis/kafka/hdfs/hbase/es by different apis
-    stream.window(new Duration(60 * 1000)).map(item => {
+    val streamRDD = stream.window(new Duration(60 * 1000)).map(item => {
       val jsonObj: JSONObject = JSON.parseObject(item, classOf[JSONObject])
       var bean: KafkaMsgBean = new KafkaMsgBean(jsonObj.getString("id"),
-        jsonObj.getString("msg"), jsonObj.getString("time"))
+        jsonObj.getString("msg"), jsonObj.getString("timestamp"))
       // timestamp yyyy-mm-dd HH:MM:SS
       val key = bean.timestamp.split(":")(0)
+      // we only get the yyyy-mm-dd HH:MM and take this as groupBy operation's key
       val value = bean
       (key, value)
     }).groupByKey.map(item => {
       val timestampValue: String = item._1
       val durationRecordCount: Int = item._2.size
       (timestampValue, durationRecordCount)
-    }).saveAsTextFiles("/app/xxx/")
+    }).foreachRDD( rdd => {
+      rdd.saveAsTextFile(s"/hdfs/path/${rdd.id}")
+    })
   }
 
 
@@ -159,7 +162,8 @@ object ExactlyKafkaSparkStreamingApp {
 
     ssc.remember(Seconds(batchInterval * 2))
 
-    val topicPartitonNum: Map[String, Int] = Map()
+    var topicPartitonNum: Map[String, Int] = Map()
+    topicPartitonNum += ("dasou-in" -> 5)
 
     val streaming: DStream[String] = kafkaDStreamInit(ssc, topicPartitonNum, false)
 
