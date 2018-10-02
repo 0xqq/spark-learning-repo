@@ -20,13 +20,16 @@
  timestamp:String # yyyy-mm-dd HH:MM:SS 格式的时间戳字符串
 }
 ```
-该结构体信息每 1 秒钟发送 1 条，
+该结构体信息每 1 秒钟发送 1 条
+
 3. 数据流经由 spark-streaming-app 开始处理, 根据分钟级进行数据聚合计数操作, 然后将数据
 ```$xslt
 {
  timestamp:String # yyyy-mm0dd HH:MM 格式时间戳字符串
+ count:Integer    # 在 1 分钟时间范围内接收到的消息计数变量字段
 }
 ```
+
 写回到 kafka-topic: kafka-out-stream, partition 5, replication 2
 在这里分别使用 spark streaming 自带的 checkpoint 来记录每次的 offset 的发送记录情况
 
