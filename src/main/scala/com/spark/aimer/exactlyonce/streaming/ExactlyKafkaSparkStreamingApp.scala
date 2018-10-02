@@ -33,8 +33,8 @@ object ExactlyKafkaSparkStreamingApp {
       var bean: KafkaMsgBean = new KafkaMsgBean(jsonObj.getString("id"),
         jsonObj.getString("msg"), jsonObj.getString("timestamp"))
       // timestamp yyyy-mm-dd HH:MM:SS
-      val key = bean.timestamp.split(":")(0)
-      // we only get the yyyy-mm-dd HH:MM and take this as groupBy operation's key
+      val key =  bean.timestamp
+      // we only get the yyyy-mm-dd HH:MM:SS and take this as groupBy operation's key
       val value = bean
       (key, value)
     }).groupByKey.map(item => {
