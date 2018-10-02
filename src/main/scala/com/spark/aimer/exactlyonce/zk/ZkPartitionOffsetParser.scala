@@ -27,7 +27,7 @@ object ZkPartitionOffsetParser {
   def fromOffsetRange(offsetRange: OffsetRange): String = {
     val jsonObj = new JSONObject
     jsonObj.put("topic", offsetRange.topic)
-    jsonObj.put("patition", offsetRange.partition)
+    jsonObj.put("partition", offsetRange.partition)
     jsonObj.put("fromOffset", offsetRange.fromOffset)
     jsonObj.put("untilOffset", offsetRange.untilOffset)
     jsonObj.toString
@@ -40,7 +40,29 @@ object ZkPartitionOffsetParser {
     val partition: Int = jsonObj.getInteger("partition")
     val fromOffset: Long = jsonObj.getLong("fromOffset")
     val untilOffset: Long = jsonObj.getLong("untilOffset")
-    new OffsetRange(topic, partition, fromOffset, untilOffset)
+    OffsetRange.create(topic, partition, fromOffset, untilOffset)
   }
 
+  // All tests pass
+  def main(args:Array[String]) = {
+    val topic = "dasou-stream"
+    val partitionId:Int = 4
+
+    val topicPartition:TopicPartition = new TopicPartition(topic, partitionId)
+    val topicPartitionStr:String = fromTopicPartition(topicPartition)
+    println(s"[TopicPartition] to Str =${topicPartitionStr}")
+
+    val topicPartitionFromStr:TopicPartition = toTopicPartition(topicPartitionStr)
+    println(s"is topicPartitionFromStr ${topicPartitionFromStr.isInstanceOf[TopicPartition]}")
+
+
+
+    val offsetRangeObj:OffsetRange = OffsetRange.create(topic, partitionId, 0L, 0L)
+    val offsetRangeStr:String = fromOffsetRange(offsetRangeObj)
+
+    println(s"[OffsetRange] to Str=${offsetRangeStr}")
+
+    val offsetRangeFromStr:OffsetRange = toOffsetRange(offsetRangeStr)
+    println(s"is offsetRangeFromStr ${offsetRangeFromStr.isInstanceOf[OffsetRange]}")
+  }
 }

@@ -73,7 +73,8 @@ object ExactlyKafkaSparkStreamingApp {
     * @param topicPartition key:topic name , value: how many partitions in total in this topic
     * @return DStream[String] the data stream from kafka to Spark StreamingContext
     **/
-  def kafkaDStreamInit(ssc: StreamingContext, topicPartition: Map[String, Int], loadCache: Boolean): DStream[String] = {
+  def kafkaDStreamInit(ssc: StreamingContext, topicPartition: Map[String, Int],
+                       loadCache: Boolean): DStream[String] = {
 
     val brokers = ""
     val group = "aimer-kafka-streaming-exactly-once"
@@ -90,8 +91,9 @@ object ExactlyKafkaSparkStreamingApp {
     val stream: DStream[String] = loadCache match {
       case true =>
         KafkaUtils.createDirectStream[String, String](
-        ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams, loadRangeOffsetFromExternal(topicPartition))
-      ).map(_.value())
+          ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams,
+            loadRangeOffsetFromExternal(topicPartition))
+        ).map(_.value())
 
       case false =>
         KafkaUtils.createDirectStream[String, String](
@@ -141,7 +143,7 @@ object ExactlyKafkaSparkStreamingApp {
 
     val topicPartitonNum: Map[String, Int] = Map()
 
-    val streaming: DStream[String] = kafkaDStreamInit(ssc, topicPartitonNum)
+    val streaming: DStream[String] = kafkaDStreamInit(ssc, topicPartitonNum, false)
 
     serviceLogicOp(streaming)
 

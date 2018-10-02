@@ -48,17 +48,14 @@ object ZkUtil {
 
   def get(path: String): String = {
     println(s"[ZkUtil] [get] [path]=${path}")
-    try {
-      new String(zkUtilHandler.getData(path, true, null), "utf-8")
-    } catch {
-      case _: Exception => ""
-    }
+    val data: String = new String(zkUtilHandler.getData(path, true, null), "utf-8")
     println(s"[ZkUtil] [get] [path]=${path} done")
+    data
   }
 
   def isPathExsits(path: String): Boolean = {
     println(s"[ZkUtil] [exists] [path]=${path}")
-    val isExists:Boolean = zkUtilHandler.exists(path, true) match {
+    val isExists: Boolean = zkUtilHandler.exists(path, true) match {
       case null => false
       case _ => true
     }
@@ -66,5 +63,35 @@ object ZkUtil {
     isExists
   }
 
+  def getChildren(path:String) = {
+    println(s"[ZkUtil] [getChildren] [path]=${path}")
+    val children = zkUtilHandler.getChildren(path, false)
+    println(s"[ZkUtil] [getChildren] [path]=${path} done")
+    import scala.collection.JavaConverters._
+    children.asScala
+  }
+
+  // All tests pass
+  def main(args: Array[String]) = {
+
+    val brokerList: String = ""
+    val sessionTimeout: Int = 5000
+    ZkUtil.conn(brokerList, sessionTimeout)
+
+    val pathName: String = "/aimer/spark/kafka"
+    var data: String = "{\"name\":\"metadata\"}"
+
+    ZkUtil.create(pathName, data)
+
+    val updateData: String = "updated metadata"
+    ZkUtil.update(pathName, updateData)
+
+    data = ZkUtil.get(pathName)
+    println(s"pathName=${pathName}, data=${data}")
+
+    ZkUtil.delete(pathName)
+    ZkUtil.close()
+
+  }
 
 }

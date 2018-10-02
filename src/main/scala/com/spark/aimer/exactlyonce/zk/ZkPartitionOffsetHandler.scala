@@ -22,7 +22,7 @@ object ZkPartitionOffsetHandler {
 
   val zkBrokerList: String = ""
   val sessionTimeout: Int = 5000
-  val zkRootPath = "/spark/kafka"
+  val zkRootPath = "/aimer/spark/kafka"
 
 
   def isTopicCached(topic: String): Boolean = {
@@ -53,16 +53,27 @@ object ZkPartitionOffsetHandler {
     ZkUtil.close
   }
 
-  def deleteTopicPartition(TopicPartition: TopicPartition) = {
+
+  def deleteTopicPartiton(topic: String) = {
     ZkUtil.conn(zkBrokerList, sessionTimeout)
-    ZkUtil.delete(s"${zkRootPath}/${TopicPartition.topic}")
-    ZkUtil.close
+    val topicPath = s"${zkRootPath}/${topic}"
+    val childrenDir = ZkUtil.getChildren(s"${zkRootPath}/${topic}")
+    for (childDir <- childrenDir) {
+      val subPath = s"${topicPath}/${childDir}"
+      println(s"delete subPath=${subPath}")
+      ZkUtil.delete(subPath)
+    }
+    ZkUtil.delete(topicPath)
+    println(s"finally delete topicPath=${topicPath}")
+    ZkUtil.close()
+  }
+
+  def deleteTopicPartition(topicPartition: TopicPartition) = {
+    deleteTopicPartiton(topicPartition.topic())
   }
 
   def deleteTopicPartition(offsetRange: OffsetRange) = {
-    ZkUtil.conn(zkBrokerList, sessionTimeout)
-    ZkUtil.delete(s"${zkRootPath}/${offsetRange.topic}")
-    ZkUtil.close
+    deleteTopicPartiton(offsetRange.topic)
   }
 
 
@@ -73,22 +84,25 @@ object ZkPartitionOffsetHandler {
     val jsonObj: JSONObject = new JSONObject
     jsonObj.put("topic", topic)
     jsonObj.put("partitionNum", partitionNum)
-    ZkUtil.isPathExsits(path) match {
-      case true => ZkUtil.update(path, jsonObj.toString)
-      case false => {
-        ZkUtil.create(path, jsonObj.toString)
-        for (partitinId: Int <- (0, partitionNum)) {
-          val rangeOffset: OffsetRange = new OffsetRange(topic, partitinId, 0, 0)
-          addRangeOffset(rangeOffset)
-        }
+    if (ZkUtil.isPathExsits(path)) {
+      ZkUtil.update(path, jsonObj.toString)
+    } else {
 
+      ZkUtil.create(path, jsonObj.toString)
+      for (partitinId: Int <- 0 until partitionNum) {
+        val rangeOffset: OffsetRange = OffsetRange.create(topic, partitinId, 0, 0)
+        addRangeOffset(rangeOffset)
       }
     }
     ZkUtil.close
   }
 
   def readTopicPartitonNum(topic: String): Int = {
-    val path = s"${zkRootPath}/${topic}"
+    val path = s"${
+      zkRootPath
+    }/${
+      topic
+    }"
     ZkUtil.conn(zkBrokerList, sessionTimeout)
     val jSONObject = JSON.parseObject(ZkUtil.get(path), classOf[JSONObject])
     val partitionNum: Int = jSONObject.getInteger("partitionNum")
@@ -100,7 +114,13 @@ object ZkPartitionOffsetHandler {
   def readRangeOffset(topic: String, partition: Int): OffsetRange = {
     ZkUtil.conn(zkBrokerList, sessionTimeout)
     val offsetRange: OffsetRange =
-      ZkPartitionOffsetParser.toOffsetRange(ZkUtil.get(s"${zkRootPath}/${topic}/${partition}"))
+      ZkPartitionOffsetParser.toOffsetRange(ZkUtil.get(s"${
+        zkRootPath
+      }/${
+        topic
+      }/${
+        partition
+      }"))
     ZkUtil.close
     offsetRange
   }
@@ -109,8 +129,77 @@ object ZkPartitionOffsetHandler {
     ZkUtil.conn(zkBrokerList, sessionTimeout)
     val offsetRange: OffsetRange =
       ZkPartitionOffsetParser.
-        toOffsetRange(ZkUtil.get(s"${zkRootPath}/${topicPartiton.topic}/${topicPartiton.partition}"))
+        toOffsetRange(ZkUtil.get(s"${
+          zkRootPath
+        }/${
+          topicPartiton.topic
+        }/${
+          topicPartiton.partition
+        }"))
     ZkUtil.close
     offsetRange
+  }
+
+
+  // All tests pass
+  def main(args: Array[String]) = {
+
+    val topic: String = "dasou-stream"
+    val topicPartitionNum: Int = 5
+
+    val zkHandler = ZkPartitionOffsetHandler
+
+    // ====== isTopicCached
+    var ret = zkHandler.isTopicCached(topic)
+    println(s"is topic=${topic} cached=${ret}")
+    // ====== isTopicCached
+
+
+    // ====== addTopicPartitionNum
+    zkHandler.addTopicPartitionNum(topic, topicPartitionNum)
+    /** *
+      * get /aimer/spark/kafka/dasou-stream/4
+      * {"partition":4,"topic":"dasou-stream","untilOffset":0,"fromOffset":0}
+      * */
+    /**
+      * get /aimer/spark/kafka/dasou-stream
+      * {"topic":"dasou-stream","partitionNum":5}
+      */
+    // ====== addTopicPartitionNum
+
+
+    // ====== addRangeOffset
+    val offsetRange: OffsetRange = OffsetRange.create("dasou-stream", 5, 0, 0)
+    zkHandler.addRangeOffset(offsetRange)
+    /**
+      * get /aimer/spark/kafka/dasou-stream/5
+      * {"partition":5,"topic":"dasou-stream","untilOffset":0,"fromOffset":0}
+      */
+    // ====== addRangeOffset
+
+
+    // ====== updateRangeOffet
+    val offsetRangeUpdated: OffsetRange = OffsetRange.create("dasou-stream", 5, 100L, 2000L)
+    zkHandler.updateRangeOffset(offsetRangeUpdated)
+    /** get /aimer/spark/kafka/dasou-stream/5
+      * {"partition":5,"topic":"dasou-stream","untilOffset":2000,"fromOffset":100}
+      */
+    // ====== updateRangeOffet
+
+
+    // ====== deleteRangeOffset
+    zkHandler.deleteRangeOffset(offsetRange)
+    /**
+      * get /aimer/spark/kafka/dasou-stream/
+      *
+      * 3   2   1   0   4
+      */
+    // ====== deleteRangeOffset
+
+
+    // ====== deleteTopicPartition(offsetRange:OffsetRange)
+    zkHandler.deleteTopicPartition(offsetRange)
+    // ====== deleteTopicPartition(offsetRange:OffsetRange)
+
   }
 }
