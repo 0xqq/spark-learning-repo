@@ -49,7 +49,7 @@ object Producer {
     var json: JSONObject = new JSONObject()
     json.put("id", kafkaMsgBean.id)
     json.put("msg", kafkaMsgBean.msg)
-    json.put("time", kafkaMsgBean.timestamp)
+    json.put("timestamp", kafkaMsgBean.timestamp)
     json.toString
   }
 }

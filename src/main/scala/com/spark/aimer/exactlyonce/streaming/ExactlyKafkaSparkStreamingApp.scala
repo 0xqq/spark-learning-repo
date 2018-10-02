@@ -1,9 +1,13 @@
 package com.spark.aimer.exactlyonce.streaming
 
+import java.util.concurrent.TimeUnit
+
+import com.alibaba.fastjson.{JSON, JSONObject}
+import com.spark.aimer.exactlyonce.kafka.Producer.KafkaMsgBean
 import com.spark.aimer.exactlyonce.zk.{ZkPartitionOffsetHandler, ZkPartitionOffsetParser}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.spark.streaming.{Milliseconds, Seconds, StreamingContext}
+import org.apache.spark.streaming.{Duration, Milliseconds, Seconds, StreamingContext}
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.{SparkConf, SparkContext, TaskContext}
 import org.apache.spark.streaming.kafka010.ConsumerStrategies.Subscribe
@@ -17,6 +21,7 @@ object ExactlyKafkaSparkStreamingApp {
 
   val zkHandler = ZkPartitionOffsetHandler
 
+
   /**
     * User's implements this method as service logic
     *
@@ -25,6 +30,19 @@ object ExactlyKafkaSparkStreamingApp {
     // here we do service level operations
     // 1. calculate the step by step either by SQLContext sqls or RDD directly transforms && actions
     // 2. save/sync results to external storages like redis/kafka/hdfs/hbase/es by different apis
+    stream.window(new Duration(60 * 1000)).map(item => {
+      val jsonObj: JSONObject = JSON.parseObject(item, classOf[JSONObject])
+      var bean: KafkaMsgBean = new KafkaMsgBean(jsonObj.getString("id"),
+        jsonObj.getString("msg"), jsonObj.getString("time"))
+      // timestamp yyyy-mm-dd HH:MM:SS
+      val key = bean.timestamp.split(":")(0)
+      val value = bean
+      (key, value)
+    }).groupByKey.map(item => {
+      val timestampValue: String = item._1
+      val durationRecordCount: Int = item._2.size
+      (timestampValue, durationRecordCount)
+    }).saveAsTextFiles("/app/xxx/")
   }
 
 
