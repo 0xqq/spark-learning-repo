@@ -73,7 +73,7 @@ object ExactlyKafkaSparkStreamingApp {
     * @param topicPartition key:topic name , value: how many partitions in total in this topic
     * @return DStream[String] the data stream from kafka to Spark StreamingContext
     **/
-  def kafkaDStreamInit(ssc: StreamingContext, topicPartition: Map[String, Int]): DStream[String] = {
+  def kafkaDStreamInit(ssc: StreamingContext, topicPartition: Map[String, Int], loadCache: Boolean): DStream[String] = {
 
     val brokers = ""
     val group = "aimer-kafka-streaming-exactly-once"
@@ -87,12 +87,17 @@ object ExactlyKafkaSparkStreamingApp {
       "enable.auto.commit" -> (false: java.lang.Boolean)
     )
 
-    val cachedOffsetRanges = loadRangeOffsetFromExternal(topicPartition)
+    val stream: DStream[String] = loadCache match {
+      case true =>
+        KafkaUtils.createDirectStream[String, String](
+        ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams, loadRangeOffsetFromExternal(topicPartition))
+      ).map(_.value())
 
-    val stream: DStream[String] = KafkaUtils.createDirectStream[String, String](
-      ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams, cachedOffsetRanges)
-    ).map(_.value())
-
+      case false =>
+        KafkaUtils.createDirectStream[String, String](
+          ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams)
+        ).map(_.value())
+    }
     stream
   }
 
