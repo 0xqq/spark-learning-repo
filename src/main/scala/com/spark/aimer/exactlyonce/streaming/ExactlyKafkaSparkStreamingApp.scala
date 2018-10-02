@@ -161,6 +161,8 @@ object ExactlyKafkaSparkStreamingApp {
 
     var topicPartitonNum: Map[String, Int] = Map()
     topicPartitonNum += ("dasou-in" -> 5)
+    // here we try multi-topics offset cache
+    topicPartitonNum += ("dasou-stream" -> 5)
 
     println("[build] [KfakaDStreamInit] [begin]")
     val stream: InputDStream[ConsumerRecord[String, String]] = kafkaDStreamInit(ssc, brokers, topicPartitonNum, true)
