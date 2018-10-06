@@ -38,10 +38,8 @@ NOTES
 | Term | Definition |
 |------|------------|
 |术语  |  相关定义  |
-| ------ | ------ | 
 | Signal | As a noun: on of the onSubscribe, onNext, onComplete, onError, request(n) or cancel methods. As a verb: calling/invoking a signal |  
 | 信号(量)|(结合语境)如果是名词的话,例如 onSubscribe, onNext, onComplete, onError, request(n) 或是 cancel 这些语境中指的是方法(函数调用)；（结合语境）如果是动词的话: 指的是所 调用/触发信号(这个动作) |
-| ------ | ------ | 
 |Demand|As a noun, the aggregated number of elements requested by a Subscriber which is yet to be delivered (fulfilled) by the Publisher. As a verb, the act of request-ing more elements|
 |需求|如果是名词,便是指有订阅方发起的将数据元素聚合的过程,这个订阅方已经被分配了数据发布者;如果是动词的话,则是指要求更多数据元素这一请求操作. |
 |Synchronous(ly)|Executes on the calling Thread.|
@@ -77,8 +75,8 @@ public interface Publisher<T>{
 ```
 
 | ID | Rule | 
-|ID|规范|
 | ------ | ------ | 
+|ID|规范|
 |1| The total number of onNext's signalled by a Publisher to a Subscriber MUST be less than or equal to the total number of elements requestes by that Subscriber's Subscription at all times.|
 |1|(onNext 这个方法是 Publisher 端发送下一条消息的方法调用)Publisher 端的 onNext 这个信号方法调用次数必须 <= Subscriber 端请求数据的次数|
 |bulb|The intent of this rule is to make it clear that Publishers cannot signal more elements than Subscribers have requested. There's an implicit, but important, consequent to this rule: Since demand can only be fulfilled after it has been received, there's a happens-before relationship between requesting elements and receiving elements.|
