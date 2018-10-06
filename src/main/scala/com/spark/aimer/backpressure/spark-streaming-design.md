@@ -206,10 +206,11 @@
 ### 4. 目标
 
 * This section describes a solution to a similar problem, and important objectives, in a bottom-up fashion, to finally reach our proposed solution in section 4.4.
-> 本小节我们通过一种自底向上的思考角度来介绍一个相似问题的解决方案, 并以相同的思考方式来给出我们将会在 4.4 小节中提出上述问题的最终解决方法.   
+本小节我们将以一种自底而上的思维角度来对上述问题相似的问题进行描述与重要目标的定位,这种思维方式与我们在第 4.4 小结所提出的问题定位和解决方法相类似. 
+(作者的意图就是,先立一个小目标(...)然后使用自底而上的思考角度来分析定位这个问题, 然后把相同的思考方式平行移动到我们面临的相对较复杂的问题上,使用相同的逐步思考的方式, 得到最终的解决方法, 而最终的解决方法在 4.4 小结介绍)
 
 * You can jump there if you want to go top-down. 
-> 当然, 如果你习惯自顶向下的思维方式的话, 你直接跳到 4.4 小节看吧.
+如果你不习惯这种思考方式(in a bottom-up fashion)而是想直接从顶之下思考问题解决方法的话, 可以直接(通过链接)跳到第 4.4 章
 
 #### 4.1 Back-pressure signaling 
 #### 4.1 反压 信号量
@@ -246,9 +247,69 @@
 #### 4.2 Composability 
 #### 4.2 (发压机制的) 模块化可行性
 
-* Back-pressure signaling composes, so that back-pressure signaling can proceed from back-pressure information:
-> 在这里我们讨论一下反压信号量的可组合性, 以便于反压信号量可以在节后到反压信息后能运行生效:
+(这里有些没看懂)
+Back-pressure signaling composes, so that back-pressure signaling can proceed from back-pressure information: 
+反压信号量是通过组合来使用的, 以便于 反压信号量 能够 从反压 信息这里出发(什么玩应)
 
-* 1. vertically, further down the stream ( such as block replication reacting on information from the job scheduler's queue).
-* 2. horizontally, at different points down the stream. E.g. the BlockGenerator can tailor its action to back-pressure information coming from both the WAL and block replication, with data feeding into those two areas in a fan-out fashion. 
- 
+* vertically, further down the stream (such as block replication reacting on information from the job scheduler's queue). 
+* 从数据流的角度出发纵向思考(调度模块中排队的 job 对block 数据进行冗余备份这一操作)
+
+* horizontally, at different points down the stream. E.g. the BlockGenerator can tailor its action to back-pressure information coming from both the WAL and block replication, with data feeding into those two area in a fan-out fashion. 
+* 从横向角度思考, 不同的数据源汇聚成流, 例如 BlockGenerator 模块能够对从 WAL 和 块冗余备份这里回传递给它的反压信息精细化它的操作
+
+In particular, a stream can have a fan-out configuration in which the data ( or a version of it, modulo a map operation) flows into two locations in parallel. 
+
+Reactive streams support this operation, and for measuring progress on block replication and WAL, in the late stages of this epic, we intend to implement one. 
+
+More details can be found in akka-sterams documentation. 
+（这个地方真的是没太看懂,所以我决定先去看看这个 Reactive Stream ）
+
+
+
+
+4.3 Compatibility: how to signal back-pressure 
+4.3 兼容方面的考虑: 如何将反压信息作为信号量传递
+
+Spark Streaming produces one batch at every batch interval, and one block at every block interval. 
+Spark Streaming 每隔批处理周期的时间间隔都会执行一次批处理计算, 并且每个批处理间隔时间内会生成一个数据块. 
+
+These constrains are fixed, and will be kept constant, if only because of backwards-compatibility. 
+只要是反压能够很好的兼容到 Spark Streaming 系统中, 上述提到的这些固定不变的操作会继续保留不做出任何修改. 
+
+Therefore, the best way of descreasing the pressure created by new elements flowing in the stream is to deliver less elements of the stream per time interval. 
+因此, 对不断接收处理上游数据流的系统而言最好的降压方式便是在每个处理数据的时间间隔内减少上游发送的数据元素.(也就是降低单位时间的数据密度,时间间隔不变, 减少时间间隔内流入系统中的数据量)
+
+This means that our adjustment variable will be the number of stream elements per block 
+这样也就是说, 我们需要调整的(并不是时间间隔的长短而)是每个 block 中数据流元素的数目.(这里总结下, block 是每个 batch interval 这个时间周期系统接收上游流入的数据而构建的数据对象, 这个 block 本身便带有 batch interval 属性)
+
+Note that the proposed strategies for dealing with congestion:
+而我们所提出的应对拥塞的策略有这些: 
+
+pushback(a.k.a. throttling at the block interval)
+数据的回退, （就是将每个 batch interval 都构建一个 block 这个操作阻塞掉）
+
+dropping data 
+将数据丢弃（这个就是系统/spark 因为处理不过来数据，从数据源开始不接收数据）
+
+sampling 
+采样(就是 100 条数据,根据不同的采样方法只获取其一部分很少量能够代表数据特征的数据)
+
+
+Can all be applied in this case - they are just applied under the constant clock ticks of the batch and block intervals. 
+你可能会问, 我们能把上述的这些策略全部用到场景中吗 -- 上述的策略仅仅会
+
+Moreover, this means our implementation does not intend to respect the Reactive Streams specification. 
+不仅如此, 这也意味着，我们的实现并不会完全遵照 Reactive Streams 说明中的相关规范. 
+
+In particular, rule 1.1. states: 
+
+
+
+
+
+
+
+
+
+
+
