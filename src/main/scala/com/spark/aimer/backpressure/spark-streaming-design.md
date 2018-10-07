@@ -318,16 +318,29 @@ Rather, when we say we intend to communicate back-pressure above, we will implem
 We aim to 
 我们的设计目标是
 
-1. add back-pressure information flowing from element accounting in jobsets in the JobScheduler to the BlockGenerator. The information will be an account of the number elements processed within a fixed interval, and will serve to set a bound on the number of elements per block. That bound may or may not be enforced based on configurable strategies. 
+* add back-pressure information flowing from element accounting in jobsets in the JobScheduler to the BlockGenerator. The information will be an account of the number elements processed within a fixed interval, and will serve to set a bound on the number of elements per block. That bound may or may not be enforced based on configurable strategies. 
 
-1. 将发源于 JobScheduler 中的 job 集合元素信息作为反压信息传递给 BlockGenerator 模块. 所传递的反压信息会作为在固定时间间隔内会被处理的一系列数据元素, 这些数据也会作用于限制每个 block 中容纳数据元素的上限阈值. 这个阈值上限根据配置策略的不同或许会或许不会作为强制限制 block 中最多可容纳数据条数的阈值上限.
+* 将发源于 JobScheduler 中的 job 集合元素信息作为反压信息传递给 BlockGenerator 模块. 所传递的反压信息会作为在固定时间间隔内会被处理的一系列数据元素, 这些数据也会作用于限制每个 block 中容纳数据元素的上限阈值. 这个阈值上限根据配置策略的不同或许会或许不会作为强制限制 block 中最多可容纳数据条数的阈值上限.
 
-2. offer an API which feeds data into the BlockGenerator based on the backpressure information. 
+* offer an API which feeds data into the BlockGenerator based on the backpressure information. - the default will maintain the exact current behavior (ignoring back-pressure) - a new option will be pushback ( reading elements from the signal until either the block interval has elapsed or the requested number of elements has been attained), equivalent to throttling. 
  
- 
- 
+* 我们会实现一个 API 借助该 API 我们可以基于反压信息作为生成反馈数据并传递给 BlockGenerator 模块. 默认的 API 会维护确定性的当前应采取的操作(会忽略掉反压信息); 另一个 API 提供数据回退的操作(所谓数据回退指的是持续从信号调用方法中所读取的数据元素知道数据块切割时间间隔过滤或是数据订阅方所接收到的数据达到其所请求的数据条数), 数据的回退操作等同于数据订阅操作给阻塞掉（暂停订阅数据）.
 
+* offer at the same emplacement three additional implementations of a strategy for input management when the number elements permission is below that of available data.
+* 当上游数据接收处理端所接收上游数据元素个数要大于所请求的数据元素个数时,有如下 3 中处理策略:
+* a. dropping data 
+* a. 直接将接收到的数据进行丢弃
+* b. random sampling 
+* b. 随机采样接收数据
+* c. interfacing with a Reactive-Streams compliant Subscriber provided as a Receiver implementation.
+* c. 将数据接收者 Receiver 遵照 Reactive-Streams 接口规范中的 Subscriber 实现方式来处理数据.
 
+* add back-pressure information flowing from block relication at the BlockManager to the BlockGenerator, and compose that information on the speed of block replication to that coming from other sources. 
+* 将由数据库冗余备份而生成的反压信息传递给 BlockGenerator, 并将来自其他数据源构建的 block 的在执行冗余备份操作时数据处理的速度数据合成.
+* add back-pressure information flowing from WAL writing to the BlockGenerator, composing that information with that of the sources described above. 
+* 将 WAL 执行过程中的相关信息作为反压信息回传给 BlockGenerator, 并将其来自于上述不同数据源所生成的反压信息进行合成. 
+* Task 1.2. and 3. are the main deliverable of this epic. Task 4. and 5. are secondary deliverables of this epic.
+* 任务 1,2,3 是本节主要实现目标, 任务 4 和 5 是本节次要实现目标. 
 
 
 
