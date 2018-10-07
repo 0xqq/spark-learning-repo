@@ -134,8 +134,74 @@ public interface Subscriber<T> {
 }
 ```
 
+| ID | Rule | 
+| ------ | ------ | 
+|ID|规范|
+|1|A Subscriber MUST signal demand via Subscription.request(long n) to receive onNext signals|
+|1|对于数据订阅方 Subscriber 而言必须通过 Subscription.request(long n) 这个信号调用方法来开启订阅, 并通过 onNext 信号方法来进行后续的数据接收流程|
+|bulb|The intent of this rule is to establish that it is the resposibility of the Subscriber to signal when, and how many, elements it is able and willing to receive.|
+|说明|这个规则的意图是,在一个订阅建立之初, 数据订阅方/Subscriber 有义务声明其何时接收数据,能接收多少数据，是否愿意开启数据的接收.|
+|2|If a Subscriber suspects that its processing of signals will negatively impact its Publisher's responsivity, it is RECOMMENDED that it asynchronously dispatches its signals.|
+|2|如果对于数据接收方/Subscriber 探测到其响应的信息对数据发布方/Publisher 起到负向影响, 推荐数据接收方/Subscriber 通过异步方式来调用信号方法.|
+|bulb|The intent of this rule is that a Subscriber should not obtruct the progress of the Publisher from an execution point-of-view. In other words, the Subscriber should not starve the Publisher from receiving CPU cycles.|
+|说明|这个规则是为了确保从程序运行的角度来看, Subscriber 是不允许阻塞 Publisher 发布数据操作的.也就是说 Subscriber 一方不允许在 Publisher 占用 CPU 资源的周期内因为自身的原因来让 Publisher 陷入空等.|
+|3|Subscriber.onComplete() and Subscriber.onError(Throwable t) MUST NOT call any methods on the Subscription or the Publisher.|
+|3|数据订阅方/Subscriber 的 onComplete 方法和其 onError(Throwable t) 方法逻辑中千万不可以调用 Subscription 或是 Publisher 中的方法.|
+|bulb|The intent of this rule is to prevent cycles and race-conditions -- between Publisher, Subscription and Subscriber -- during the processing of completion signals.|
+|说明|这个约束的目的是为了防止 Publisher, Suscription 与 Subscrier 之间在调用完成信号调用时候引起的循环调用和竟态|
+|4|Subscriber.onComplete() and  Subscriber.onError(Throwable t) MUST consider the Subscription cancelled after having received the signal.|
+|4|Subscriber 在实现其 onComplete() 和 onError(Throwable t) 方法逻辑时必须将在接收到信号调用后整个订阅过程被取消的这种情况下所需采取的操作或是处理逻辑考虑在内.|
+|bulb|The intent of this rule s to make sure that Subscribers respect a Publisher's terminal state signals. A Subscription is simply not valid anymore after an onComplete or onError signal has been received.|
+|说明|这个约束的作用是为了确保, 订阅方/Subscrier 需要遵从数据发布方/Publisher 所传递的终态信号量.一个订阅过程在接收到 onComplete 或是 onError 方法发送的信号量之后整个订阅便会失效.|
+|5|A Subscriber MUST call Subscription.cancel() on the given Subscription after an onSubscribe signal if it already has an active Subscription.|
+|5|如果当前的订阅过程/Subscription 已经处于活跃状态, 那么参与其中的订阅方/Subscriber 必须通过调用 Subscription 的 cancel 方法来主动退出当前的订阅过程.|
+|bulb|The intent of this rule is to prevent that two, or more, separate Publishers from thinking that they can interact with the same Subscriber. Enforcing this rule means that resources leaks are prevented since extra Subscriptions will be cancelled.|
+|说明|这个规则为未来防止2到多个分隔开的数据发布者/Publisher 有着相同的的下游订阅者. 只要严格遵守这个规定的话, 就能够确保资源不会被泄露, 因为这样能够保证同一个数据订阅者/Subscripter 不会同时在多个订阅过程中(不会存在订阅多个数据源的情况)|
+|6|A Subscriber MUST call Subscription.cancel() if the Subscription is no longer needed.|
+|6|如果不在订阅数据的话, 数据订阅方/Subscriber 必须通过调用 Subscription 的 cancel 方法作为发起取消订阅的操作.|
+|bulb|The intent of this rule is to establish that Subscribers cannot just throw Subscription away when they are no longer needed, they have to cancel so that resource held by that Subscription can be safely, and timely, reclaimed. An example of this would be a Subscriber which is only interested in a specific element, which whould then cancel its Subscription to signal its completion to the Publisher.|
+|说明|这个规则是为了确保数据订阅方/Subscriber 在与数据发布方/Publisher 建立订阅关系后，不能说不订阅数据就订阅了, 它/Subscriber 必须主动通过 onCancel 方法来发起取消操作以便于订阅过程中所占用的资源能够安全地,有规律地被释放,回收. 比方说, 数据订阅端只负责接收订阅数据流中的特定的元素, 在接收到之后就会通过调用 Subscription 的 cancel 方法来向其上游数据发布方/Publisher 发送完成数据订阅的信号.|
+|7|A Subscriber MUST ensuer that all calls on its Subscrition take place from the same thread or provide for repective external synchronization.|
+|7|数据的订阅方必须保证其所建立起的订阅过程中所有的调用请求都有相同的线程发起,或是如果是有多个线程发起必须要借助于外部同步方法来保证线程安全.|
+|bulb|The intent of this rule is to establish that external synchronization must be added if a Subscriber will be using a Subscription concurrently by two or more threads.|
+|说明|此约束是为了保证所订阅过程必须确保是同步的,如果是订阅方有 2 到多个线程牵涉到调用中的话, 便需要借助于外部同步方法来保证线程安全.|
+|8|A Subscriber MUST be prepared to receive one or more onNext signals after having called Subscription.cancel() if there is still requested elements pending [see [3.12]()]. Subscription.cancel() does not guarantee to perform the underlying cleaning operation immediately.|
+|8|Subscriber 在调用 Subscription.cancel() 方法之后, 如果上游还有未传输完的数据的话, 其必须要准备好接收 1 到多个 onNext 方法调用所发来的信号量的准备.|
+|bulb|The intent of this rule is to highlight that there may be a delay between calling cancel and the Publisher observing that cancellation.|
+|说明|这个规则是为了强调这样一个事情:Subscriber 在调用 cancel 方法之后会存在一定的延迟,在这段延迟期间 Publisher 是处于阻塞的.|
+|9|A Subscriber MUST be prepared to receive an onComplete signal with or without a preceding Subscription.request(long n) call.|
+|9||
 
 
+
+
+
+
+
+|9|While the Subscription is not cancelled, Subscription.request(long n) MUST signal onError with a java.lang.IllegalArgumentException if the argument is <= 0. The cause message SHOULD explain that non-positive request signals are illegal.|
+|9|当订阅过程还存在,并且所创建的 Publisher 与 Subscriber 之间连接还未取消的时候, Subscription 的 request(long n) 这个方法调用传入的参数 n<= 0 的话, 便会触发 onError 函数返回一个 java.lang.IllegalArgumentException 异常. 消息必须传达一种能够说明在调用 request 方法传入参数 <=0 是一种非法的调用这样的信息才行.|
+|bulb|The intent of this rule is to prevent faulty implementation to proceed operation wihtout any exceptions beng raised. Requesting a negative or 0 number of elements, since requests are additive, most likely to the result of an erroneous calculation on the behalf of the Subscriber.|
+|说明|之所以有这个规定是为了防止在执行操作出现错误之后,防止没有任何异常抛出来(导致无法定位问题). |
+|10|While the Subscription is not cancelled, Subscription.request(long n) MAY synchronously call onNext on this (or other) subscriber(s).|
+|10|只要是订阅过程没有结束, Subscription.request(long n) 这个方法是允许以同步的方式来自己调用 onNext 或是其他的订阅者上调用 onNext 这个方法的.|
+|bulb|The intent of this rule is to establish that it is allowed to create synchronous Publishers,i.e. Publishers who execute their logic on the calling thread.|
+|说|这个规定的意图是为了说明同步的 Publisher 的创建时被允许的,这样一来多个 Publisher 便可以在其调用线程上执行其各自的逻辑.|
+|11|While the Subscription is not cancelled, Subscription.request(long n) MAY synchronously call onComplete or onError on this ( or other ) subcriber(s).|
+|11|订阅过程只要是没有结束, 那么 Subscription 的 request(long n) 是允许在当前或是其他订阅者上按照同步顺序的方式来调用 onComplete 或是 onError 方法的.|
+|bulb|The intent of this rule is to establish that it is allowed to create synchronous Publishers, i.e. Publishers who execute their logic on the calling thread.|
+|说明|这个规则 11 是为了说明, 同步的 Publisher 是允许被创建的, 也就是说, Publisher 可以在其调用线程上执行其相关的逻辑.|
+|12|While the Subscription is not cancelled, Subscription.cancel() MUST request the Publisher to eventally stop signalling its Subscriber. The operation is NOT REQUIRED to affect the Subsctiption immediately.|
+|12|只要是订阅过程未被释放,Subscription.cancel() 这个方法必须通过请求 Publisher 来将终止信号发送给其 Subscriber. 但是,当这个停止信号发送给其 Subscriber 到停止信号被接收因为存在一定延迟,所以停止信号发送之后,整个订阅过程不会立即停止,会有一定的时间延迟的.|
+|bulb|The intent of this rule is to establish that the desire to cancel a Subscription is eventually respected by the Publisher, acknowledging that it may take some time before the signal is received.|
+|说明|规则12的意图是为了强调, 取消订阅过程这一请求需要遵照 Publisher 端的意愿, 也就是说在发起取消订阅请求信号到这个请求被接收与响应执行期间需要一定时间.|
+|13|While the Subscription is not cancelled, Subscription.cancel() MUST request the Publisher to eventually drop any references to the corresponding subscriber.|
+|13|在订阅过程声明周期内, 通过 Subscription 的 cancel 这个方法一定会触发 Publisher 将订阅其数据的 Subscriber 之间所建立的关系进行释放.|
+|bulb|The intent of this rule is to make sure that Subscribers can be properly garbage-collected after their subscription no longer being valid. Re-subscribing with the same Subcriber object is discouraged [see [2.12](https://github.com/reactive-streams/reactive-streams-jvm/tree/v1.0.2#2.12)], but this specification does not mandate that it is disallowed since that would mean having to store previously cancelled subscriptions indefinely.|
+|说明|规则 13 的意图是为了确保: 订阅者/Subscribers 在订阅过程释放后能够执行适当的垃圾回收等收尾工作.  对于相同的下游订阅者/Subscriber 而言并不鼓励订阅过程的重复使用, 因为复用的话有可能会遇到之前的订阅过程中还有一些上个订阅过程中所造成干扰的惨厉信息(即信息释放不充分,复用容易造成信息不一致).|
+|14|While the Subscription is not cancelled, calling Subscription.cancel MAY cause the Publisher, if stateful, to transition into the shut-down state if not other Subscriber  exists at this point [see [1.9](https://github.com/reactive-streams/reactive-streams-jvm/tree/v1.0.2#1.9)]|
+|14|在订阅过程声明周期内, 调用 Subscription 的 cancel 的方法能够引起数据发布方转换到终结状态,如果数据发布方/Publlisher 存在状态且下游没有数据订阅者/Subscriber 存在.|
+|bulb|The intent of this rule is to allow for Publishers to signal onCompute or onError following onSubscribe for new Subscribers in response to cancellation signal from an existing Subscriber.|
+|||
 
 
 
