@@ -109,11 +109,30 @@ public interface Publisher<T>{
 |8|一旦一个订阅过程终止了, 那么在这个订阅对中的订阅一方必须停止向数据发送方发送请求数据的信号信息|
 |bulb|The intent of this rule is to make sure that Publishers respect a Subscriber's request to cancel a Subscription when Subscription.cancle() has been called. The reason for eventually is because signals can have propagation delay due to being asynchronous.|
 |灯泡|这个规则的意图是确保Publisher 应该遵照 Subscriber 方停通过 Subscription.cancle() 来停止数据订阅的意图. 之所以这么规定是因为传递的信号信息有时候会因为消息的异步而存在一定概率的迟延.|
-|9|Publisher.subscribe MUST call onSubscribe on the provided Subscriber prior to any other signals to that Subscriber and MUST return normally, except when the provided Subscriber is null in which case it MUST throw a java.lang.NullPointerException to the caller, for all other situatons the only legal way to signal failure(or reject the Subscriber) is by calling onError (after calling onSubscribe).|
-|9||
+|9|Publisher.subscribe MUST call onSubscribe on the provided Subscriber prior to any other signals to that Subscriber and MUST return normally, except when the provided Subscriber is null in which case it MUST throw a java.lang.NullPointerException to the caller, for all other situations the only legal way to signal failure (or reject the Subscriber) is by calling onError (after calling onSubscribe).|
+|9|Publisher 的 subscribe 方法在订阅中对其 Subscriber 而言要比其他信号调用有着更高级别的响应优先级, 以至于 Subscriber 一经接收该信号调用必须立即正确地返回, 除非 Subscriber 实例为空(尚未初始化) 在这种情况下会为调用者抛出一个 java.lang.NullPointerException 的异常, 除了这种实例为空抛异常的情况, 其他任何情况下用来描述调用失败(或是拒绝订阅过程)唯一合法的返回值便是通过调用 onError 这个方法(调用顺序应该位于 onSubscribe 方法之后)|
+|bulb|The intent of this rule is to make sure that onSubscribe is always signalled before any of the other signals, so that initialization logic can be executed by the Subscriber when the signal is received. Also onSubscribe MUST only be called once, [see [2.12](https://github.com/reactive-streams/reactive-streams-jvm/tree/v1.0.2#2.12)]. If the supplied Subscriber is null, there is nowhere else to signal this but to the caller, which means a java.lang.NullPointerException must be thrown. Examples of possible situations: A stateful Publisher can be overwhelmed, bounded by a finite number of underlying resources, exhausted, or in a [terminal state](). |
+|灯泡|这个约束是为了保证 onSubscribe 该信号量调用优先级高于其他信号量调用方法, 以便于 Subscriber 先于其他任何信号量调用来处理 onSubscribe 调用以完成其初始化过程(防止 Subscriber 还未初始化好久就响应其他信号量调用). 同时还有一点, onSubscribe 方法必须只能被调用一次, 具体看[2.12](https://github.com/reactive-streams/reactive-streams-jvm/tree/v1.0.2#2.12) 这里. 如果响应 Publisher 的 Subscriber 实例为空(未被初始化), 就没办法响应其他的信号量调用方法, Subscriber 订阅端这边能做的只能是抛出一个 java.lang.NullPointerException 这个异常. 而无法接收到正确方式响应的 Publisher 端有可能会处于一下几种状态: Publisher 会被崩溃退出, 或是其所使用的有限资源会被耗尽, 或是到达终态而停止数据发布. |
+|10|Publisher.subscribe MAY be called as many times as wanted but MUST be with a different Subscriber each time [see[2.12](https://github.com/reactive-streams/reactive-streams-jvm/tree/v1.0.2#2.12)].|
+|10|Publisher 的订阅方法允许根据实际需要而被调用多次, 但必须确保的是每次的 Subscriber 均不相同,进一步了解请见 [2.12](https://github.com/reactive-streams/reactive-streams-jvm/tree/v1.0.2#2.12)|
+|bulb|The intent of this rule is to have callers of subscribe be aware that a generic Publisher and a generc Subscriber can not be assumed to support beging attaching multiple times.Furthermore, it also mandates that the semantics of subscribe must be upheld no matter how many times it is called.|
+|灯泡|规则10的意图是为了确保订阅中的调用信号而言, 访问 Publisher 和 Subscriber 多次的情况下并不是每次都能访问得到的. 不仅如此, 该规则还说明了在订阅语义范围内, 无论订阅操作被调用几次，每次创建的订阅过程都应该被保持（而不是每次调用之后就将其释放掉）.|
+|11|A Publisher MAY support multiple Subscribers and decides whether each Subscription is unicast or multicast|
+|11|对于 Publisher 而言允许有多个 Subscriber 订阅其发布的数据,只需要通过设定该订阅过程是单播还是多播即可.|
+|bulb|The intent of this rule is to give Publisher implementation the flexibility to decide how many, if any, Subscribers they will support, and how elements are going to be distributed.|
+|灯泡|规则11的意图是为了保证对于给定 Publisher 而言它在实现逻辑上支持其下游订阅方有多少个,以及以何种方式来分发数据元素给 Subscriber 的.|
 
+### Subscriber
+### 订阅者
 
-
+```
+public interface Subscriber<T> {
+    public void onSubscribe(Subscription s) ; 
+    public void onNext(T t) ; 
+    public void onError(Throwable t);
+    public void onComplete();
+}
+```
 
 
 
