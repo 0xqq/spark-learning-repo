@@ -197,7 +197,7 @@
 > 1. 在数据流动变得缓慢的地方的通信拥塞能够作为反馈信息回传给数据采集模块(也就是 ReceiverSupervisor)
 
 * 2. Lets the Receiver's Executor implement strategies to deal gracefully with that congestion ( for instance : pushback (a.k.a. not consuming data)/throttling, dropping data, sampling strategies) in a modular, configurable way. 
-> 2. 我们可以让处理接收数据的 Executor 来实现一个模块, 在这个模块中我们定义不同类型的策略以优雅地应对不同类型的拥塞(例如, 将数据回推(也称作是, 不消费数据)/阻塞数据), 将数据丢包,取样策略等. 
+> 2. 我们可以让处理接收数据的 Executor 来实现一个模块, 在这个模块中我们定义不同类型的策略以优雅地应对不同类型的拥塞(例如, 将数据回退(也称作是, 不消费数据)/阻塞数据), 将数据丢包,取样策略等. 
 
 * The overarching goal is for Spark Streaming to remain stable and running ( on a best effort basis) as the thoughput of data changes. 
 > 我们解决问题的出发点是在系统在所处理的数据量发生变动时, 尽最大努力来确保 Spark Streaming 计算应用程序平稳运行.
@@ -216,7 +216,6 @@
 #### 4.1 反压 信号量
 
 * The intent is, for starters, for the [JobScheduler](https://github.com/apache/spark/blob/master/streaming/src/main/scala/org/apache/spark/streaming/scheduler/JobScheduler.scala) to start monitoring the length of the queue and request new elements based on that. To that effect, we suggest one source for inspiration: 
-
 > 我们这么做的目的便是, 对于初学者而言他需要知道 [JobScheduler](https://github.com/apache/spark/blob/master/streaming/src/main/scala/org/apache/spark/streaming/scheduler/JobScheduler.scala) 是通过开始监控队列的长度并且根据队列当前的长度来决定是否请求新的元素入队的. 我们将这一点(也就是 JobScheduler 中的队列长度作为控制是否请求新数据/元素) 来作为我们的思考出发点(灵感之源的翻译有点傻...所以我还是不用了...):
 
 * [Reactive Streams](http://www.reactive-streams.org/) （oh my god , is this the jdk9's new feature? =V=) is an initiative to provide a standard for asynchronous stream processing with non-blocking back pressure. 
@@ -245,39 +244,38 @@
 
 
 #### 4.2 Composability 
-#### 4.2 (发压机制的) 模块化可行性
+#### 4.2 (反压)可组合性
 
-(这里有些没看懂)
 Back-pressure signaling composes, so that back-pressure signaling can proceed from back-pressure information: 
-反压信号量是通过组合来使用的, 以便于 反压信号量 能够 从反压 信息这里出发(什么玩应)
+反压信号调用方法是可组合的, 以至于根据反压信息便可触发产生反压信号量方法的调用.
 
 * vertically, further down the stream (such as block replication reacting on information from the job scheduler's queue). 
-* 从数据流的角度出发纵向思考(调度模块中排队的 job 对block 数据进行冗余备份这一操作)
+* 顺着数据流来纵向思考下,比方说数据块冗余备份这一操作环节会影响到 job 调度器的队列中存放的信息内容.
 
 * horizontally, at different points down the stream. E.g. the BlockGenerator can tailor its action to back-pressure information coming from both the WAL and block replication, with data feeding into those two area in a fan-out fashion. 
-* 从横向角度思考, 不同的数据源汇聚成流, 例如 BlockGenerator 模块能够对从 WAL 和 块冗余备份这里回传递给它的反压信息精细化它的操作
+* 如果顺着数据流进行多角度全方位发散思考的话. 例如, BlockGenerator 模块能够根据从 WAL日志写操作 和 数据块冗余备份操作而生成的反压信息作为反馈数据来调整自己下一步的操作，
 
-In particular, a stream can have a fan-out configuration in which the data ( or a version of it, modulo a map operation) flows into two locations in parallel. 
-
-Reactive streams support this operation, and for measuring progress on block replication and WAL, in the late stages of this epic, we intend to implement one. 
-
-More details can be found in akka-sterams documentation. 
-（这个地方真的是没太看懂,所以我决定先去看看这个 Reactive Stream ）
+* In particular, a stream can have a fan-out configuration in which the data ( or a version of it, modulo a map operation) flows into two locations in parallel. 
+* 在特殊的情况下, 数据流能够将配置信息分散开，并将负载的配置信息平行地同步至不同的目的地上. 
 
 
+* Reactive streams support this operation, and for measuring progress on block replication and WAL, in the late stages of this epic, we intend to implement one.
+* 响应式数据流中支持上述的操作, 并且能对数据库冗余备份和 WAL 日志写入过程进行测量, 在本段落叙述的最后,我们也会尝试实现一个 'Reactive stream'.
 
+More details can be found in akka-streams documentation. 
+更多的实现细节可以参考 akka-streams 相关文档.(批注: 在这篇设计文档被设计出来的时候, Spark 整个系统中的网络模块还是基于 akka 实现的, 直到后续 Spark 版本中 network 模块才逐步替换为 netty 框架,所以在这里仍可见 akka 编程框架的相关文档)
 
-4.3 Compatibility: how to signal back-pressure 
-4.3 兼容方面的考虑: 如何将反压信息作为信号量传递
+#### 4.3 Compatibility: how to signal back-pressure 
+#### 4.3 兼容方面的考虑: 如何将反压信息信号化
 
 Spark Streaming produces one batch at every batch interval, and one block at every block interval. 
 Spark Streaming 每隔批处理周期的时间间隔都会执行一次批处理计算, 并且每个批处理间隔时间内会生成一个数据块. 
 
 These constrains are fixed, and will be kept constant, if only because of backwards-compatibility. 
-只要是反压能够很好的兼容到 Spark Streaming 系统中, 上述提到的这些固定不变的操作会继续保留不做出任何修改. 
+只要是反压能够很好的兼容到 Spark Streaming 系统中, 在处理上述约束方面不做出任何修改. 
 
 Therefore, the best way of descreasing the pressure created by new elements flowing in the stream is to deliver less elements of the stream per time interval. 
-因此, 对不断接收处理上游数据流的系统而言最好的降压方式便是在每个处理数据的时间间隔内减少上游发送的数据元素.(也就是降低单位时间的数据密度,时间间隔不变, 减少时间间隔内流入系统中的数据量)
+因此, 对不断接收处理上游数据流的系统而言最好的降压方式便是在每个时间间隔周期内减少上游流入汇聚到当前数据流中的数据元素才行.(也就是降低单位时间的数据密度,时间间隔不变, 减少时间间隔内流入系统中的数据量)
 
 This means that our adjustment variable will be the number of stream elements per block 
 这样也就是说, 我们需要调整的(并不是时间间隔的长短而)是每个 block 中数据流元素的数目.(这里总结下, block 是每个 batch interval 这个时间周期系统接收上游流入的数据而构建的数据对象, 这个 block 本身便带有 batch interval 属性)
@@ -292,16 +290,45 @@ dropping data
 将数据丢弃（这个就是系统/spark 因为处理不过来数据，从数据源开始不接收数据）
 
 sampling 
-采样(就是 100 条数据,根据不同的采样方法只获取其一部分很少量能够代表数据特征的数据)
+采样接收数据(就是 100 条数据,根据不同的采样方法只获取其一部分很少量能够代表数据特征的数据)
 
 
 Can all be applied in this case - they are just applied under the constant clock ticks of the batch and block intervals. 
-你可能会问, 我们能把上述的这些策略全部用到场景中吗 -- 上述的策略仅仅会
+你可能会问上述解决策略是否能够解决我们面临的问题, 只要将其实现在每个批次和构建数据块的周期间隔内给出实现即可. 
 
 Moreover, this means our implementation does not intend to respect the Reactive Streams specification. 
-不仅如此, 这也意味着，我们的实现并不会完全遵照 Reactive Streams 说明中的相关规范. 
+不仅如此, 这也意味着，在我们提出的实现方法中并不会完全遵照 Reactive Streams 说明中的相关规范. 
 
 In particular, rule 1.1. states: 
+特别是, Reactive Stream 中的 1.1 条规则说明: 
+
+<b>The total number of onNext signals sent by a Publisher to a Subscriber MUST be less than or equal to the total number of elements requested by that Subscriber's Subscription at all times.</b> 
+<b>由数据发布者/Publisher 通过调用 onNext 信号量函数向其中之一的数据订阅者/Subscriber 所发送的数据条数必须小于等于数据订阅者/Subscriber 的在订阅过程中/Subscription 请求数目的总条数.</b>
+
+Rather, when we say we intend to communicate back-pressure above, we will implement:
+我们不遵照上述的 1.1 规则说明是指当我们在实现反压消息通信时不遵照, 我们这样来实现:
+
+<b>The total number of elements per block produced by a BlockGenerator to a Subscriber MUST be less than or equal to the total number of elements last requested by that Subscriber's Subscription at all times.</b>
+<b>由每个 BlockGenerator 模块而生成并传递给下游其一数据订阅者(Subscriber)元素总数必须要小于等于这个数据订阅者(Subscriber)在订阅过程(Subscription)建立之初所请求的数据元素总条数.</b>
+
+
+#### 4.4 Proposed Solution 
+#### 4.4 提出的解决方案
+
+We aim to 
+我们的设计目标是
+
+1. add back-pressure information flowing from element accounting in jobsets in the JobScheduler to the BlockGenerator. The information will be an account of the number elements processed within a fixed interval, and will serve to set a bound on the number of elements per block. That bound may or may not be enforced based on configurable strategies. 
+
+1. 将发源于 JobScheduler 中的 job 集合元素信息作为反压信息传递给 BlockGenerator 模块. 所传递的反压信息会作为在固定时间间隔内会被处理的一系列数据元素, 这些数据也会作用于限制每个 block 中容纳数据元素的上限阈值. 这个阈值上限根据配置策略的不同或许会或许不会作为强制限制 block 中最多可容纳数据条数的阈值上限.
+
+2. offer an API which feeds data into the BlockGenerator based on the backpressure information. 
+ 
+ 
+ 
+
+
+
 
 
 
