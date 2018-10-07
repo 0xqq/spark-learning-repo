@@ -1,5 +1,6 @@
 #### Storage Reading List
 
+* [zh-spark-memory-iteblog](https://www.iteblog.com/archives/2342.html)
 * [zh-spark-memory-management](https://www.ibm.com/developerworks/cn/analytics/library/ba-cn-apache-spark-memory-management/index.html)
 * [zh-spark-memory](http://shiyanjun.cn/archives/1585.html)
 * [en-spark-configuration-memory-management](https://spark.apache.org/docs/latest/configuration.html#memory-management)
