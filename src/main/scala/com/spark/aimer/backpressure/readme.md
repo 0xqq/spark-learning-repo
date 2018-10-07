@@ -3,6 +3,7 @@
 #### related design docs 
 * [Add back-pressure signaling to Spark Streaming](https://docs.google.com/document/d/1ls_g5fFmfbbSTIfQQpUxH56d0f3OksF567zwA00zK9E/edit)
 * [Spark Streaming back-pressure signaling](https://docs.google.com/document/d/1ZhiP_yBHcbjifz8nJEyPJpHqxB1FT6s8-Zk7sAfayQw/edit#)
+* [Operating on backpressure in Spark with a PID](https://www.dropbox.com/s/dwgl7wa1z5wbkg6/PIDderivation.pdf?dl=0)
 
 #### related jira issue
 * [SPARK-25233](https://issues.apache.org/jira/browse/SPARK-25233)
