@@ -24,25 +24,25 @@
 - 4.2 可组合性
 
 - 4.3 Compatibility: how to signal back-pressure 
-- 4.3 可组合性之: 如何传递将发压信号
+- 4.3 可组合性之: 如何将发压作为信号传递
 
 - 4.4 Proposed solution
 - 4.4 本文提出的解决方案
 
 #### 5. Requirements 
-#### 5. 需求介绍
+#### 5. 需求
 
 - 5.1 Failure Recovery 
-- 5.1 失败重试 方面的需求
+- 5.1 失败重试  
 
 - 5.2 Performance
-- 5.2 性能 方面的需求
+- 5.2 性能 
 
 - 5.3 Maintainability 
-- 5.3 可维护性 方面的需求
+- 5.3 可维护性 
 
 #### 6. Alternatives
-#### 6. 替换方案
+#### 6. 备选方案
 
  
 #### 7. Implementation Details 
@@ -378,8 +378,36 @@ The asynchronous signaling of back pressure is expected to allow for a high thro
 Nonetheless, this work should test the performance of Spark Streaming to ensuer there are no regressions. 
 虽然想是这么想的, 但是我们必须系统测试下加了这个功能之后的 Spark Streaming 的整体性能,以避免因处理不当而进行的回归测试. 
 
+Morever, this work should come with a throughput variation test demostrates its main advantage: Spark Streaming will not crash when flooded with too much data.
+不仅仅是简单的进行系统或是压测,我们应该用一个变量来作为描述系统的吞吐量的量化数,通过这个变量数值的高低来作为评判系统吞吐量的好坏,从而可以通过这个变量清晰地表述出在加上相关功能(back-pressure)到系统中后系统的吞吐量是否有明显提升,以及 Spark Streaming 在上游数据量突增的情况下是否还会崩溃退出. 
+
+#### 5.3 Maintainability 
+#### 5.3 (系统的可)维护性
+
+This aims for simplicity, in particular, the measure of congestion should occur at the local level, and be understandable. 
+出于简单这一初衷考虑的, 特别是阻塞的测量操作应该在本地层级上以易于理解的方式来执行. 
+
+In particular, care will be taken that at the point of generation of the request signals, so that the discipline for generating the number of allowed elements will be as simple as possible.
+特别是, 在生成请求信号量的这一时间点需要特别小心对待才行, 只有这样,才能保证数据元素的编号可以以使有规律且简单地被生成. 
+
+### 6 Alternative
+### 6 可选方案
+
+One alternative to Spark Streaming breaking under load would be to introduce rate-limiting in various points of the architecture, in quite the way the solution to [SPARK-1314](http://issues.apache.org/jira/browse/SPARK-1341) did. 
+备选方案 1 是通过在架构各个模块中引入限速处理数据来分散负载,这个解决问题的思路与 [SPARK-1314](http://issues.apache.org/jira/browse/SPARK-1341) issue 相同.
+
+This would introduce more queues to the system, however, and not only would it not guarantee good behavior under load, but it would multiply the number of settings to tune for a stable configuration.  
+但这种将更多的队列引入系统的方法,怎么说呢, 不仅无法很好地处理负载,而且也会徒增更多的用于调优的配置选项.
+
+One other alternative would be to implement blocking back-pressure signaling, but this kills performance in low latencies where there is enough resources to deal with the amount of data. 备选方案 2 是通过在生成构建数据块这一步骤来产生反压信号量, 但是这种处理方法会对影响系统原有的低延迟性, 特别是当系统中有充足资源足以应对处理数据的时候. (也就是说, 本身反压信号量就是为了根据系统资源量和上游数据密度来控制接收的数据密度, 但如果增加功能过于刻意的话, 会出现一种资源充足应对上游数据，但却为了生成反压信号反而造成系统处理数据延迟的情况.)
+
+Another alternative would be to signal back-pressure based on a measure of memory taken up by elements of the signal, on one hand, and memory available on each relevant executor, on the other hand. 
+备选方案 3 反压信号量, 一方面可以通过基于测量被信号元素所使用的内存的使用量来生成, 另一方面也可以通过每个参与运算的 executor 上可用的内存量来生成.
 
 
+
+
+ 
 
 
 
