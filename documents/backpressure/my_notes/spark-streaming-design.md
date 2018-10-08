@@ -342,6 +342,46 @@ We aim to
 * Task 1.2. and 3. are the main deliverable of this epic. Task 4. and 5. are secondary deliverables of this epic.
 * 任务 1,2,3 是本节主要实现目标, 任务 4 和 5 是本节次要实现目标. 
 
+### 5 Requirements
+### 5 (根据上述问题而提出的)需求
+
+#### 5.1 Failure Recovery 
+#### 5.1 失败恢复
+
+The proposed solution should not break the existig fault recovery of Spark Streaming. 
+(基于问题而)提出的问题解决方法不应打破 Spark Streaming 中原有的错误恢复机制.
+
+However, Spark Streaming's recovery proceeds from created blocks only - and is not currently idempotent. 
+但, Spark Streaming 的错误恢复机制仅会在已创建的数据块上生效, - 并且就目前来看恢复操作并不是幂等.
+
+By only changing block creation, this proposal does not change the reproducibility of the stream's data significantly: blocks created in this way will still enjoy the same fault tolerance. 
+在我们所提出的解决方案中仅会变动数据块的构建过程并不会对数据流中数据恢复这里有很大的影响：但凡是通过原有方式构建生成的数据块仍会享有原有的数据容错恢复机制. 
+
+Moreover, in a distinct area, it should be noted that the write to the WAL should, when activated, occur before the registeration of a block. 
+不止如此,值得一提的是在另一个地方数据的 WAL 日志写入操作应该先于数据块的注册操作被触发.
+
+At the moment, this is ensured by blocking on the HDFS write call. 
+这么做是为了确保 HDFS 上数据块的写入过程能够被 WAL 完整记录,以便于失败恢复. 
+
+This constraint will be maintained in the new solution. 
+ 这种约定俗成的机制将会在我们提出新解决方案中继续使用. 
+
+Finally, spectacular care will be made to explain with the utmost clarity that strategies that involve data loss (dropping, sampling) are lossy. Those will never be the default.
+最后, 对牵涉到因数据订阅端丢弃数据,随机抽样这些处理策略而引发的数据丢失的情况我们会超留意且尽全力详尽地对其进行阐述. 并且确保绝对不会有默认情况下不清不楚地调用默认的一种数据处理策略(丢失,随机抽样).
+
+#### 5.2 Performance 
+#### 5.2 性能
+
+The asynchronous signaling of back pressure is expected to allow for a high throughput. 
+我们预计在采用反压信号量的异步化之后, 系统整体能够高吞吐地运行. 
+
+Nonetheless, this work should test the performance of Spark Streaming to ensuer there are no regressions. 
+虽然想是这么想的, 但是我们必须系统测试下加了这个功能之后的 Spark Streaming 的整体性能,以避免因处理不当而进行的回归测试. 
+
+
+
+
+
 
 
 

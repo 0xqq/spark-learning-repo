@@ -4,8 +4,10 @@
 * [Add back-pressure signaling to Spark Streaming](https://docs.google.com/document/d/1ls_g5fFmfbbSTIfQQpUxH56d0f3OksF567zwA00zK9E/edit)
 * [Spark Streaming back-pressure signaling](https://docs.google.com/document/d/1ZhiP_yBHcbjifz8nJEyPJpHqxB1FT6s8-Zk7sAfayQw/edit#)
 * [Operating on backpressure in Spark with a PID](https://www.dropbox.com/s/dwgl7wa1z5wbkg6/PIDderivation.pdf?dl=0)
+* [Dynamic Stream Rate Limiter for Spark Streaming](https://docs.google.com/document/d/1lqJDkOYDh_9hRLQRwqvBXcbLScWPmMa7MlG8J_TE93w/edit)
 
 #### related jira issue
+* [SPARK-6691](https://issues.apache.org/jira/browse/SPARK-669://issues.apache.org/jira/browse/SPARK-6691)
 * [SPARK-25233](https://issues.apache.org/jira/browse/SPARK-25233)
 * [SPARK-18580](https://issues.apache.org/jira/browse/SPARK-18580)
 * [SPARK-18371](https://issues.apache.org/jira/browse/SPARK-18371)
