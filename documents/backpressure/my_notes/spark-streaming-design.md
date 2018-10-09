@@ -24,7 +24,7 @@
 - 4.2 可组合性
 
 - 4.3 Compatibility: how to signal back-pressure 
-- 4.3 可组合性之: 如何将发压作为信号传递
+- 4.3 可组合性之: 如何将反压作为信号传递
 
 - 4.4 Proposed solution
 - 4.4 本文提出的解决方案
