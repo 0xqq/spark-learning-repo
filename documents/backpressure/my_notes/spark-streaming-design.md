@@ -450,18 +450,31 @@ In particular, care will be taken that at the point of generation of the request
 ### 7 （技术）实现细节
 
 * Reactive Streams are transport-agnostic, meaning that the messages between Publisher and Subscriber(in paricular, between the JobScheduler on the Driver, and the Receiver, on an Executor) do no have a transport specified. 
-* Reactive Stream 是数据数据传输不可知, 就是数据发布方和数据订阅方的数据传输方式是不确定的, 例如数据发布方可以是 Spark Driver 端的 JobScheduler , 而数据接收方是 Executor 的 Receiver. （观点: 这个地方我对数据传输不可知的理解是: Publisher Receiver 二者之间传输数据的方式 pull 和 push 方式是根据 Publisher 与 Subscriber 二者之间收发数据的速率来决定的）
+* Reactive Stream 是数据属于传输不可知的, 就是说数据发布方和数据订阅方的对消息传输方式是不确定的, 例如数据发布方可以是 Spark Driver 端的 JobScheduler , 而数据接收方是 Executor 的 Receiver. （观点: 这个地方我对数据传输不可知的理解是: Publisher Receiver 二者之间传输数据的方式 pull 和 push 方式是根据 Publisher 与 Subscriber 二者之间收发数据的速率来决定的）
 <p/>
  
 * We will resure actors, as implemented throughout Spark Streaming's control plane, to deliver those. 
-* 在实现方面, 我们计划复用 actor 该贯穿 Spark Stream 消息发送框架来作为分发数据消息的载体.  
+* 在实现方面, 我们会复用 actor 这一贯穿 Spark Stream 消息发送框架来作为分发数据消息的载体.  
 <p/>
 
 * In the case above, that means one more message from the ReceiverTracker (running in the JobScheduler) to the ReceiverSupervisor ( within which the Receiver and BlockGenerator run). 
 * 在上述讨论的 Driver 是数据发送方, 而 Executor 的 Receiver 是数据接收方这种场景下, 其实是指消息在 JobScheduler 模块中的 ReceiverTracker 发送到 ReciverSupervisor 中(在 ReceiverSupervisor 中运行了 Reciver 和 BlockGenerator 这两个对象实例).
 <p/>
 
-* 
+* The implementation of the request number issued by a JobScheduler will match the number of elements cleared (processed) during a batch interval. 
+* 在我们的实现方案中, JobScheduler 请求的消息条数将会与每个 batch 时间周期中处理/清空的数据消息条数匹配上. 
+<p/>
+
+* In case the job queue is measured to be back-logged, every job will signal its scheduling delay at batch completion. 
+* 在这种情况下, job 队列会计算返回的日志信息, 而返回的日志数据由各个 job 根据其每个 batch 结束后调度延迟生成的信号量构成的. 
+<p/>
+
+* So, we will remove from elementes processed within the last batch a proportional, configurable fraction of the number of elements that could have been processed during that scheduling delay. 
+* 所以, 我们将会移除从最后批次中一定比例地移除部分数据, 并将每次能够处理计算数据量占数据总量这一比例作为可配置的参数，以便于用户指定. 
+<p/>
+
+* This will serve, in practice, as an integral part of control exerted by a [PID controller](https://en.wikipedia.org/wiki/PID_controller).
+* 将上述的逻辑实现是基于 [PID 控制](https://en.wikipedia.org/wiki/PID_controller) 中的思想,它在实际生产环境中这种调控方式十分有用. 
 
 
 
