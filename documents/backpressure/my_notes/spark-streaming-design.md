@@ -393,21 +393,77 @@ In particular, care will be taken that at the point of generation of the request
 ### 6 Alternative
 ### 6 可选方案
 
-One alternative to Spark Streaming breaking under load would be to introduce rate-limiting in various points of the architecture, in quite the way the solution to [SPARK-1314](http://issues.apache.org/jira/browse/SPARK-1341) did. 
+* One alternative to Spark Streaming breaking under load would be to introduce rate-limiting in various points of the architecture, in quite the way the solution to [SPARK-1314](http://issues.apache.org/jira/browse/SPARK-1341) did. 
 备选方案 1 是通过在架构各个模块中引入限速处理数据来分散负载,这个解决问题的思路与 [SPARK-1314](http://issues.apache.org/jira/browse/SPARK-1341) issue 相同.
 
-This would introduce more queues to the system, however, and not only would it not guarantee good behavior under load, but it would multiply the number of settings to tune for a stable configuration.  
-但这种将更多的队列引入系统的方法,怎么说呢, 不仅无法很好地处理负载,而且也会徒增更多的用于调优的配置选项.
+* This would introduce more queues to the system, however, and not only would it not guarantee good behavior under load, but it would multiply the number of settings to tune for a stable configuration.  
+但这种将更多的队列引入系统的方法,怎么说呢,不仅无法很好地处理负载,而且也会徒劳增加更多的用于调优的配置选项.
 
-One other alternative would be to implement blocking back-pressure signaling, but this kills performance in low latencies where there is enough resources to deal with the amount of data. 备选方案 2 是通过在生成构建数据块这一步骤来产生反压信号量, 但是这种处理方法会对影响系统原有的低延迟性, 特别是当系统中有充足资源足以应对处理数据的时候. (也就是说, 本身反压信号量就是为了根据系统资源量和上游数据密度来控制接收的数据密度, 但如果增加功能过于刻意的话, 会出现一种资源充足应对上游数据，但却为了生成反压信号反而造成系统处理数据延迟的情况.)
+* One other alternative would be to implement blocking back-pressure signaling, but this kills performance in low latencies where there is enough resources to deal with the amount of data. 备选方案 2 是通过在生成构建数据块这一步骤来产生反压信号量, 但是这种处理方法会对系统原有的低延迟性造成影响, 特别是当系统中有充足资源足以计算处理数据的时. (也就是说, 本身反压信号量就是为了根据系统资源量和上游数据密度来控制接收的数据密度, 但如果增加功能过于刻意的话, 会出现一种资源充足应对上游数据，但却为了生成反压信号反而造成系统处理数据延迟的情况.)
 
-Another alternative would be to signal back-pressure based on a measure of memory taken up by elements of the signal, on one hand, and memory available on each relevant executor, on the other hand. 
-备选方案 3 反压信号量, 一方面可以通过基于测量被信号元素所使用的内存的使用量来生成, 另一方面也可以通过每个参与运算的 executor 上可用的内存量来生成.
+* Another alternative would be to signal back-pressure based on a measure of memory taken up by elements of the signal, on one hand, and memory available on each relevant executor, on the other hand. 
+备选方案 3 一方面可以通过基于测量被信号元素所使用的内存用量来生成反压信号量, 另一方面也可以通过每个参与运算的 executor 上可用的内存量来生成反压信号量.
+(总结下: 备选方案 3 中, 其实是想通过量化内存使用量来做为反压的信号量, 也就是通过内存用量的高低来作为衡量系统负载高低的量化指标,通过这一量化指标来作为反压信号量传递给数据接收端, 这样就可以控制数据接收端在负载低是增大数据接收密度, 在负载重的时候降低数据接收密度)
 
+这里对于上述 3 中方案简单整理下吧(有不对的地方,不过会随着理解不断加深回头及时更正), 
+方案 1, 增加队列, 不同队列并发处理,以此来希望降低系统的负载,但是,通过[博文:队列不能用来降低系统负载](http://ferd.ca/queues-don-t-fix-overload.html) （这篇文章的见解很独到）说明了, 徒然增加队列对于系统负载降低无益处, 且加了这么多的队列, 会对系统配置项(SparkConf) 中增加很多参数, 调优费劲. 所以方案 1 pass 
+方案 2, 在每个时间间隔周期(Spark 的 batch interval 期间)生成 block 的同时根据系统上下环境参数量化生成反压信号量数据, 但是, 本身构建 block 的时候就希望其能被很快的处理计算掉, 但是由于方案 2 提出的在生成 block 的这个阶段, 还增加一步生成信号量, 这就回大大的增加block 构建时间整体的延迟, 就算系统资源充足, 增加反压数据量化这一步就能将平均数据处理速度拉低, 实在得不偿失. 
 
+备选方案 3 通过内存使用量作为评估系统当前负载情况的量化参考指标, 虽然也有很多问题和不确定不准确性, 但是较比 1,2 备选方案可用性大大增加, 所以最终选了 3. 
+以及如下是备选方案 3 基于内存用量来评估系统负载,生成反压信号量的缺点:
 
+* the memory available at a given time for for the cache, as a whole, is not useful for this task: a Receiver's executor, when overwhelmed, will crash with free memory left in the cluster's cache taken as a whole. 
+* <b>在时间段已知的情况下(这个时间段我觉得就是 block 生成的 batch interval 周期的起始时间点), 将获取缓存空间中内存用量占比的大小可以作为衡量系统内存使用率是可以的, 但是, 当 Receiver 的 executor 因其处理的任务将内存空间打满而崩溃退出而将其占用的缓存空间释放掉这种情况发生的时候, 这种简介的从局部到整体的评估内存使用率的准确度便会受到影响, 因为释放的全部空间会作为未被使用的内存降低整体内存使用率, 但是 task 因 OOM 退出其实是因为系统内存不足, 所以因 OOM 内存资源缺少而崩溃退出释放出的内存空间反而会降低系统的内存使用率, 这种信号量一旦传递给数据接收方, 接收方会接收更多的数据, 从而产生恶性循环.</b>
 
+<p/>
+* this measure is complex to implement since memory usage is impacted by more than elements of the signal as they are read initially. This would have to take into account e.g. by transient RDDs created along the processing of along the processing of the elements of a DStream 
+
+* 测量内存使用量的处理方式很复杂因为内存资源会被很多系统中的其他元素影响到,不仅仅是一开始的信号量引起的内存使用率. 比如说这种情况(就是前面提到的情况)， 在 DStream 中随元素处理计算而被临时创建的 RDD 所占用的内存空间便是上述提到的无法直接测量的 '被很多系统中的其他元素'. 
+
+<p/>
+* the discipline for measuring congestion in the presence of several DStreams is unclear: a Receiver's Executor is also susceptible to receiving replicated blocks from another DStream. 
+
+* 用于测量阻塞的规则在应用在一些现有的 DStream 上效果也并不准确: 特别当接收并处理数据的 Receiver 的 Executor 接收处理另一个 DStream 冗余备份的数据块的时.
+<p/>
+
+* Finally, measuring the memory impact of elements read from the signal is difficult to do precisely - i.e. better than based on well-timed snapshots of available free cache memory.
+* 最后， 根据从信号数据源读取的元素,也就是基于现场快照的环境下获取内存空闲率, 这种方法来衡量内存使用量达到精准十分困难. 
+
+<p/>
+* However, an advantage of this centralized, memory-accounting approach is that it ensuers there are no OOMs. 
+* 纵使有这么多缺点, 这种集中化处理的带来的好处便是, 基于内存用量的评估方法能够确保没有 OOM 的发生. 
+<p/>
+
+* With that being said, the situations in which OOM can happen in our approach seem limited enough for us to favor simplicity in the trade-off with precision（7）.
+* 这么说吧, 在我们看来, 出现 OOM 问题的情况就那么几种, 所以我们会以牺牲部分准确度来简化计算测量过程, 因为这种简化采集方法后所获取得内存使用率,已足以解决(OOM)问题. 
+
+<p/>
+* Finally, there is the solution of communicating back pressure asynchronously, but without enforcing a rule that Publishers do not exceed their allotted permissions -- i.e. relying on time and happenstance to make sure the Receiver does not overflow the buffer of the cluster's collective Executor, for instance by checking that back-pressure has not gone 'red' every 10 seconds. 
+* 一番讨论下来, 总算是得到一个异步通信传递反压信号量且不对数据发布方指定相关数据发布规则解决方案了, -- 也就是说, 在周期发生事件和偶然突发事件中, 通过每 10 秒检测反压信号量是否飘红(超出最大上限阈值), 能够保证其接收到数据量不会超出集群中所有 Executor 内存空间的总和. 
+
+<p/>
+* The issus is that this solution would not work for any given throughput -- indeed, it can require an arbitrarily large buffer size. 
+* 问题是, 这种解决方案在可以获取任意大小缓存空间的系统中, 是无法提升该系统的吞吐量的.  
+<p/>
+
+### 7 Implementation Details 
+### 7 （技术）实现细节
+
+* Reactive Streams are transport-agnostic, meaning that the messages between Publisher and Subscriber(in paricular, between the JobScheduler on the Driver, and the Receiver, on an Executor) do no have a transport specified. 
+* Reactive Stream 是数据数据传输不可知, 就是数据发布方和数据订阅方的数据传输方式是不确定的, 例如数据发布方可以是 Spark Driver 端的 JobScheduler , 而数据接收方是 Executor 的 Receiver. （观点: 这个地方我对数据传输不可知的理解是: Publisher Receiver 二者之间传输数据的方式 pull 和 push 方式是根据 Publisher 与 Subscriber 二者之间收发数据的速率来决定的）
+<p/>
  
+* We will resure actors, as implemented throughout Spark Streaming's control plane, to deliver those. 
+* 在实现方面, 我们计划复用 actor 该贯穿 Spark Stream 消息发送框架来作为分发数据消息的载体.  
+<p/>
+
+* In the case above, that means one more message from the ReceiverTracker (running in the JobScheduler) to the ReceiverSupervisor ( within which the Receiver and BlockGenerator run). 
+* 在上述讨论的 Driver 是数据发送方, 而 Executor 的 Receiver 是数据接收方这种场景下, 其实是指消息在 JobScheduler 模块中的 ReceiverTracker 发送到 ReciverSupervisor 中(在 ReceiverSupervisor 中运行了 Reciver 和 BlockGenerator 这两个对象实例).
+<p/>
+
+* 
+
+
 
 
 
