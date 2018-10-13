@@ -52,34 +52,37 @@
 #### 8. 具体涉及到的代码变动
 ----
 
+<l>NOTE: 翻译的内容部分地方我自己结合理解和上下文关系擅自加上的,目的为了让原文表述更明白, 有时会因为理解不到位引起错误,可能会给阅读者带来误解,所以如果真有人阅读到这里的话,遇到错误请及时告知,或是带着批判,辩证思考的态度来阅读）
+---
+
 ### 1. Introduction: a Receiver's context 
 ### 1. Spark Streaming 中 Receiver 机制介绍 
 * Data receiving is accomplished by a Receiver, started by a SparkStreamingContext, which receives data and stores data in Spark ( though not in an RDD at this point). 
-
-> 接收数据(流)由 Receiver 这个在 SparkStreamingContext 中被创建启动的对象来负责, 它也负责了 Spark 系统中的数据的接收与存储(目前我们先跳过数据存放和 RDD 二者之间的关系) 
-
+* <b>接收数据(流)由 Receiver 这个在 SparkStreamingContext 中被创建启动的对象来负责, 它也负责了 Spark 系统中的数据的接收与存储(目前我们先跳过数据存放和 RDD 二者之间的关系)</b> 
+<p/>
 * Data processing transfers the data stored in Spark's BlockManager(BM) into the DStream by creating an RDD. 
-> 数据(流)处理过程是将存放在 Spark 系统中的 BlockManager 实例中的数据通过创建一个 RDD 的方式转换成 DStream 对象. 
+* <b>数据(流)处理过程是将存放在 Spark 系统中的 BlockManager 实例中的数据通过创建一个 RDD 的方式转换成 DStream 对象. </b>
+<p/>
 
 * You can then apply the usual two operation classes -- transformations and output operations -- on the DStream.
-> 接下来你便可以通过调用 'transformations/操作类' 和 'output operations/数据输出类' 这两个常用的操作作用在 DStream 对象上(以实现对数据流的转换与输出结果等操作). 
-
+* <b>接下来你便可以通过调用 'transformations/操作类' 和 'output operations/数据输出类' 这两个常用的操作作用在 DStream 对象上(以实现对数据流的转换与输出结果等操作). </b>
+<p/>
 
 * There is only one Receiver per input stream.
-> Receiver 和 输入数据流是一对一的关系
+* <b>Receiver 和 输入数据流是一对一的关系</b> <p/>
 
 
 ### 2. Data flow of Spark Streaming
 ### 2. Spark Streaming 的数据流图 
 
 * In Spark Streaming, when a Receiver is started, a new block is generated every spark.streaming.blockInterval milliseconds, and each block is turned into a partition of the RDD that will eventually be created by the DStream. 
-> 在 Spark Streaming 中, 一个 Receiver 对象一旦被启动, 每隔 ```spark.streaming.blockInterval``` 这些毫秒的时间便会构建一个新的 block， 每个 block 被转变为拥有着多个分区的 RDD 对象中的分区之一, 而 DSteram 则由这些有着多个分区每个分区映射 1 个 block 的多个 RDD 所构成.（总结一下: BlockManager 中有多个 block, 每个 block 对应了 1 个 RDD 中的 1 个分区(partition), 而 DStream 则是由多个 RDD 构成的, DStream 通过 forEachRDD 可以遍历每个 RDD, RDD 通过 forEachPartition 可以遍历 每个 Partition）
+* <b>在 Spark Streaming 中, 一个 Receiver 对象一旦被启动, 每隔 ```spark.streaming.blockInterval``` 这些毫秒的时间便会构建一个新的 block， 每个 block 被转变为拥有着多个分区的 RDD 对象中的分区之一, 而 DSteram 则由这些有着多个分区每个分区映射 1 个 block 的多个 RDD 所构成.（总结一下: BlockManager 中有多个 block, 每个 block 对应了 1 个 RDD 中的 1 个分区(partition), 而 DStream 则是由多个 RDD 构成的, DStream 通过 forEachRDD 可以遍历每个 RDD, RDD 通过 forEachPartition 可以遍历 每个 Partition）</b><p/>
 
-><b> 总结一下: 在上面这个小段中, 介绍了参数 spark.streaming.blockInterval 这个参数的视角是上游数据流的，是指相隔多久时间段生成 1 个block ， 而这个 block 对应 RDD 中的 1 个partition  </b>
+* <b> 总结一下:</b> 在上面这个小段中, 介绍了参数 spark.streaming.blockInterval 这个参数的视角是上游数据流的，是指相隔多久时间段生成 1 个block ， 而这个 block 对应 RDD 中的 1 个partition
 
 
 * The number of partitions in the RDDs created by, e.g, a KafkaInputDStream is determined by batchInterval/spark.streaming.blockInterval, where batchInterval is the time interval at which streaming data will be divided into batches( set via a constructor parameter of StreamContext). 
-> 上述构成了 DStream 的 RDD 中的分区数目是由(在这里我们假定上游输入数据流对象是 KafkaInputDStream) ```batchInterval/spark.streaming.blockInterval``` 这两个变量相除得到的, 其中```batchInterval``` 是 Spark 系统中将数据流切分成批处理数据块(batch) 的间隔时间, 通过 StreamContext 构造方法传入参数即可.  
+> 上述构成了 DStream 的 RDD 中的分区数目是由(在这里我们假定上游输入数据流对象是 KafkaInputDStream) ```batchInterval/spark.streaming.blockInterval``` 这两个变量相除得到的, 其中```batchInterval``` 是 Spark 系统中将数据流切分成批处理数据块(batch) 的间隔时间, (这个间隔时间可以)通过 StreamContext 构造方法传入参数来设定.  
 
 > <b>总结一下: 在上面的小段中, 介绍了参数 batchInterval，这个参数的视角是 StreamContext, 是指多久对上游输入的数据流进行一次 batch 切割, 切割 1 次，构建 1 个RDD, 而构建的这个 RDD 中 partition 分区的数目= StreamContext 切割数据流时间间隔/上游生成 1 个block 时间间隔 = 这段期间生成的 block 数目一共有多少, block 的数目便是构建的这个 RDD 中分区的数目 </b>
 
@@ -109,10 +112,10 @@
 
 > <b>记录一下: 现在为止,一共引出了 3 个时间名词 <p>spark.streaming.blockInterval:描述上游输入数据流生成 block 的时间间隔</p><p>batch interval: Spark 系统中将数据流切分成批处理数据块(batch) 的间隔时间</p><p>batch processing time:Spark 系统处理 batch 数据花费时间, 是整个流计算引擎吞吐计算能力的体现</b>
  
-(接下来介绍了数据流通中的相关约定)
+(接下来介绍了数据流中的相关约定)
 
-* The data and meta-data flow inside of Spark Streaming is represented in the attached [figure]()
-> Spark Streaming 系统中的数据及元数据流图通过[此连接可查]()
+* The data and meta-data flow inside of Spark Streaming is represented in the attached [figure](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/backpressure/png/backpressure1.png)
+> Spark Streaming 系统中的数据及元数据流图通过[此连接可查](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/backpressure/png/backpressure1.png)
 
 * Data flow up to before RDD creation is in bold arrows, meta-data flow is in normal width arrows.
 > 在 RDD 构建之前的数据流图使用加粗箭头描述, 元数据流图使用普通箭头描述.
@@ -127,12 +130,9 @@
 > 需要注意的几点
 
 > * ReceiverSupervisor handles only one Receiver per Dsteram 
-> * ReceiverSupervisor 在每个 Dstream 中仅会负责处理 1 个 Receiver 对象 
-
+> * ReceiverSupervisor 在每个 Dstream 中仅会负责处理 1 个 Receiver 对象(Receiver input stream 前文中有提到是一一对应的关系)
 > * Note the WriteAheadLogManager accesses the same structure, both in the ReceivedBlockHandler and as part of block generation.
 > * 需要注意的是, WriteAheadeLogManager 实例每次访问的都是同一个结构体, 这个结构体在 ReceivedBlockHandler 中, 并且也是每次生成 block 的组成成员.
-
-
 > * As shown, both BlockManager and ReceiverTracker use actors to communicate control and meta-data.  
 > * 如图所示, BlockManager 和 ReceiverTracker 两个实例对象中借助 actor 来同步控制信息与元数据
 
@@ -149,7 +149,6 @@
 ### 3. 问题描述
 * Data flows into Spark's cache at the ingestion of data, in the block and RDD creation mechanism described above. 
 > 上面的数据流图描绘了，数据采集阶段数据在 Spark 的缓存中, 在 BlockManager 数据块中, 以及在 RDD 构建过程中的流动方式. 
-> 
 
 * It flows out of Spark's cache as the RDDs are processed and dropped out of cache, or checkpointed. 
 > 图中描绘了当数据流从 Spark 的缓存中流出时变为 RDD 对象进行计算处理并脱离缓存, 或是作为检查点落盘.
@@ -466,18 +465,41 @@ In particular, care will be taken that at the point of generation of the request
 <p/>
 
 * In case the job queue is measured to be back-logged, every job will signal its scheduling delay at batch completion. 
-* 在这种情况下, job 队列会计算返回的日志信息, 而返回的日志数据由各个 job 根据其每个 batch 结束后调度延迟生成的信号量构成的. 
+* 在将 job 队列中的信息进行量化并将量化值作为返回记录的反压信号量汇总日志, 而对于 job 队列中的每个 job 而言, 每个job 会将 batch 结束后它的调度延迟时间作为其(反压)信号量. 
 <p/>
 
 * So, we will remove from elementes processed within the last batch a proportional, configurable fraction of the number of elements that could have been processed during that scheduling delay. 
-* 所以, 我们将会移除从最后批次中一定比例地移除部分数据, 并将每次能够处理计算数据量占数据总量这一比例作为可配置的参数，以便于用户指定. 
+* 所以,我们将会从最后一个处理批次中移除一定比例的待计算元素,以此来调控延迟调度期间调整待处理计算元素的数量. 
 <p/>
 
 * This will serve, in practice, as an integral part of control exerted by a [PID controller](https://en.wikipedia.org/wiki/PID_controller).
-* 将上述的逻辑实现是基于 [PID 控制](https://en.wikipedia.org/wiki/PID_controller) 中的思想,它在实际生产环境中这种调控方式十分有用. 
+* <b> 上述这种调控方法源于 [PID 控制](https://en.wikipedia.org/wiki/PID_controller) 一文中的思想,这种调控方法在实际生产环境中十分有用. </b>
 
 
+* The BlockGenerator, recipient of the back-pressure signal will then set the adjustment variable:
+* <b> BlockGenerator(数据块生成模块), 反压信号量接受者, 在接收到反压信号量之后会根据反压信号数值来调整如下变量数值:</b> 
 
+<p/>
+* the maximal number of elements taken as input in every block to match the speed (elements/time) communicated by the request: a well-computed number of elements processed within the lastbatch interval. 
+* <b>加载到数据块中的元素上限需要和通信端发送的请求信息: 当前系统数据处理速率(速率: 单位时间内处理元素的数量) 相匹配才行, 而来自通信端的请求信息中记录了在上一个批处理时间段内被系统正确处理的元素数量.</b>
+* <b>小小总结梳理一下:</b> 上面这句话包含的这样几个信息, BlockGenerator 负责在单位 batch 时间周期内接收上游数据并构建 block/数据块, 数据块传输给计算模块进行处理计算. 我们将上一个批次 block 中的数据处理元素数量获取到, 计算之后便会得到 总元素数量/计算处理时间 = 单位时间内处理数据元素的数据量, 将这个数据量作为反压信号从计算模块反馈给 BlockGenerator 模块, BlockGenerator 会根据自己 batch 时间周期 * 单位时间处理元素数据量 所得到的这个数值, 作为本次打包成 block 的元素数量. 以及反压 按照中文字面意思来理解, 应该是 '用以反馈（系统）压力(至数据接收段)的信号量'. 
+
+<p/> 
+* A particular point of note is that the back-pressure signal extrapolates the measure of the number of elements processed during a batch interval from asynchronously-transmitted values, sampled at every batch interval clock tick: 
+* <b>值得一提的是, 借助于时钟周期抽样获取的反压信号量的数值可以推算出 每个批处理时间段内来自于每个批处理异步广播数值中被处理计算的元素数量</b>
+<p/>
+
+* 1. The JobScheduler measures cleared elements in the last batch interval by a precise computation that is sampled at, but not dicated by batch and block interval ticks: if a job starts at batch interval n, and finishes by the end of batch interval n+2 -- i.e. a slow job , a scenario frequent in congestion -- then the number of processed elements in the last batch interval is half the number of elements in the job. 
+* <b>1. Job Scheduler 精确计算测量上一批次中被清理元素数据数目是通过随机抽样而非逐一批次逐一数据块时钟周期计算得到:如果一个 job 起始时间为第 n 个批次, 并在地 n+2 个批次后完成 --i.e. 也就是说, 在一个拥塞发生频繁的应用场景中, 运行一个计算缓慢的 job --(这里就是说 n 批次开始 n+2 批次结束的这个 job 对应当前 spark 系统而言是处理特别慢的, 正常速率的 job 通常是 n 批次开始之后就结束, 而这个 job 占了足足 2 个 batch, 会导致后续 batch 延迟, 以及拥塞的发生), --在这种 2 个批次处理完 1 个 job 全量数据的情况下, 最后批次中处理的数据总量其实是当前 job 数据量的一半. </b>
+
+* 2. If the JobScheduler measures that the elements processed in the last batch have been cleared in less than the batch interval, it reports the number of elements that the system would have processed if it had been churning during the whole batch interval. I.e. if a job is the only one executed, starts at batch interval n, and finishes after half of the batch interval is elapsed - i.e. a fast job - then the number of processed elements in the batch interval is twice the number of elements in the job. 
+
+* 2. <b>如果 JobScheduler 检测到上一个处理批次中所处理的元素数量要比每个批次中加载进来的元素数量要少(说明系统当前计算处理数据量跟不上上游到达数据量), 如果在整个批处理时间期间, JobScheduler 中的参加计算的元素会发生流动的话 (这个地方我理解应该是上下批次一直有数据到来, 每个批次都有数据不间断到来, 所以这个批次所生成的反馈信号量会对下一个批次切分数据量的多少造成影响), 那么 JobSchduler 将会把系统能够应付的来的元素数量作为反压信号量发送出去,以此来控制上游接收数据量. 也就是说, 如果当前系统中处于活跃状态的 job 只有一个(只有一个 job 用于计算), 该 job 起始于第 n 个批次,用了半个处理批次时间 job 执行完成, (相当于在 1 个 batch 时间段计算就结束了)也就是说, 这种属于处理快速的 job (通常规定的是 1 个 batch 生成的 job, 应该在 1 个batch Interval 时间段内被处理完成, 前面那个 job 用了 2 个 batch interval 属于慢 job, 而这个 job 用了 0.5 个 batch interval ， 属于快 job ， 这个说明系统当前的处理数据量要快于上游数据到达量，资源充足) -- 在JobScheduler 通过反压信号量将'系统资源充足足以应对更多数据'的信号反馈给 BlockGenerator 之后, 在紧接着下个处理批次中放入到系统中供 job 处理的数据量将会是该批数据量的 2倍.  </b>
+<p/>
+
+* 3. In case the number of elements processed during the last batch interval in none, because the blocks processed so far have been empty, then the request will communicate an Int.MaxValue, which amounts to not restricting the amount of elements per block. 
+
+* 3. <b>如果是上一个处理批次元素数量是空的情况(也就是数据断流,上个批次没有上游数据流入系统),由于处理的数据块一直都是空的,所以系统请求数据流元素的数量会被设定为整型最大数值, 也就是数据块 block 中所接收的数据量不封顶,有多少来多少都封到 1 个 block 中.</b> 
 
 
 
