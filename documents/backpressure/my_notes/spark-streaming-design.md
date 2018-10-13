@@ -480,12 +480,17 @@ In particular, care will be taken that at the point of generation of the request
 * <b> BlockGenerator(数据块生成模块), 反压信号量接受者, 在接收到反压信号量之后会根据反压信号数值来调整如下变量数值:</b> 
 
 <p/>
+
 * the maximal number of elements taken as input in every block to match the speed (elements/time) communicated by the request: a well-computed number of elements processed within the lastbatch interval. 
+
 * <b>加载到数据块中的元素上限需要和通信端发送的请求信息: 当前系统数据处理速率(速率: 单位时间内处理元素的数量) 相匹配才行, 而来自通信端的请求信息中记录了在上一个批处理时间段内被系统正确处理的元素数量.</b>
+
 * <b>小小总结梳理一下:</b> 上面这句话包含的这样几个信息, BlockGenerator 负责在单位 batch 时间周期内接收上游数据并构建 block/数据块, 数据块传输给计算模块进行处理计算. 我们将上一个批次 block 中的数据处理元素数量获取到, 计算之后便会得到 总元素数量/计算处理时间 = 单位时间内处理数据元素的数据量, 将这个数据量作为反压信号从计算模块反馈给 BlockGenerator 模块, BlockGenerator 会根据自己 batch 时间周期 * 单位时间处理元素数据量 所得到的这个数值, 作为本次打包成 block 的元素数量. 以及反压 按照中文字面意思来理解, 应该是 '用以反馈（系统）压力(至数据接收段)的信号量'. 
 
-<p/> 
+<p/>
+ 
 * A particular point of note is that the back-pressure signal extrapolates the measure of the number of elements processed during a batch interval from asynchronously-transmitted values, sampled at every batch interval clock tick: 
+
 * <b>值得一提的是, 借助于时钟周期抽样获取的反压信号量的数值可以推算出 每个批处理时间段内来自于每个批处理异步广播数值中被处理计算的元素数量</b>
 <p/>
 
@@ -501,13 +506,75 @@ In particular, care will be taken that at the point of generation of the request
 
 * 3. <b>如果是上一个处理批次元素数量是空的情况(也就是数据断流,上个批次没有上游数据流入系统),由于处理的数据块一直都是空的,所以系统请求数据流元素的数量会被设定为整型最大数值, 也就是数据块 block 中所接收的数据量不封顶,有多少来多少都封到 1 个 block 中.</b> 
 
+* This also implies:
+* <b>这同样意味着: </b>
+<p/>
+
+* 文章从这里便开始讨论代码中的相关细节了,前面多是逻辑层面的讨论, 后续可以看到 DStream 等相关 Spark 源码中相关的对象信息
+
+* 1) That during a batch interval, the processing times are (locally) linear in the number of elements. Indeed, in the computation above, we assume that we can approximate the processing speed for a single batch interval from processing times that are either slightly larger (slow jobs, taking more than a single batch interval to complete) or slightly smaller (fast jobs, taking less than that a batch interval). This assumption breaks down, of course, for jobs that are non-linear. 
+* 1) 在批处理计算期间, 可以认为本地处理计算时间开销和该批次处理的元素数量成线性关系. (之所以强调本地,我估计是为了避免讨论网络传输数据所引起的这一部分时间开销会加到数据计算开销这里). 事实上, 在对计算过程进行描述的过程中, 我们可以通过单个批次的数据计算时间无论是较大的处理时间（当处理的 job 属于慢 job 1 个处理批次/batch没法结束完成）,还是稍小的处理时间(当处理的是快 job 的时候，单个处理批次中 job 计算完成绰绰有余), 来估算出(系统)的处理速度. 如果将这种计算时间开销和处理速度元素数量呈线性关系的假设从宏观层面细化粒度到 job 处理层面的话, 当然了你就会发现, 对于 job 而言, 其处理数据的时间开销和数据量并不一定呈线性关系.
+
+* 2) That onNext(), assuming the BlockGenerator subscribes to the JobScheduler's information, does not push an element of type T down the DStream. Rather, it makes the BlockGenerator produce custom-sized blocks at the set block interval. It is the maximal number of elements in this block that is constrained and answers the back-pressure signal. 
+* 2） 还有就是 onNext() 这个被认作是 BlockGenerator 作为反压数据信号量的订阅从 JobScheduler 中所订阅反压消息并不会向数据类型为 T 的 DStream 方推送 数据元素. （这个地方是这样的: 大概作者是怕读者蒙圈, 再次强调了下, 反压数据信号量传递给 BlockGenerator 是用来让它调控 block 数据块大小的参数信息, 而并非是将反压信号量传递给 BlockGenerator 让 Generator 把信号量压成 block 发送给 DStream 参加计算的, 一个是控制信号量,另一个是上游待计算的数据流, 二者是不同的）而是这样, 发压数据信号量在传递给 BlockGenerator 之后, 该信号量会调控 BlockGenerator 在生成数据块时间间隔内调控生成 block 数据块包含数据元素量的大小. 而这个数据元素量的大小是每个 block 数据块中所包含元素数据量最大上限的阈值(也就是最多不能超过这个值,但是比这个值小时完全可以的,不要求完全达到最大上限), 并以此来作为对接收到的反压信号量的响应. 
+ 
+* 3) That the parameter type of Subscriber[T] and Publisher[T] is relatively straightforward: the type T is the type of elements of the DStream, and that it is simply meant to be passed to (and checked by) block generation.
+* 3) 那个 Subscriber[T] 和 Publisher[T] 中的参数类型 T 的定义方式是显而易见的, 就是DStream 数据流中处理数据元素对象的类型, 而这个类型也是经由 block generation 模块传递并检查的参数类型. （DStream 的 T 和 Publisher , Subscriber 以及 BlockerGeneration 处理的数据类型全部统一使用 T 这个泛型类型来进行描述）
+
+* 4) That the working of the whole feedback loop depends on little else than a request(n:Int) message - satisfying the locality condition mentioned in [§5.3](https://docs.google.com/document/d/1ZhiP_yBHcbjifz8nJEyPJpHqxB1FT6s8-Zk7sAfayQw/edit#heading=h.26in1rg). The JobSchduler measures how many elements have been cleared from the queue during the last batch Interval, and sends back that information to the BlockGenerator. The limit number of elements for the next block is then set at block generation, after application of the strategy chosen for input limitation ([§4.4](https://docs.google.com/document/d/1ZhiP_yBHcbjifz8nJEyPJpHqxB1FT6s8-Zk7sAfayQw/edit#heading=h.4d34og8), 3.).
+
+ 
+* 4) 反馈系统当前处理数据压力的(反压)信号量所在的整个反馈闭环工作流的信息传递中除了调用 request(n:Int) 函数外其实也有借助其他方法 - 第[§5.3](https://docs.google.com/document/d/1ZhiP_yBHcbjifz8nJEyPJpHqxB1FT6s8-Zk7sAfayQw/edit#heading=h.26in1rg). 小节中所提到的信号量也需结合本地的状态环境信息等待才可以(也就是消息传递的决策方案需要结合接收消息对象所处的本地情况进行综合考虑才得出最终执行的决策). JobScheduler 在反馈消息流程中负责测量出上个批次计算中共多少元素从队列中移除, 并将这个作为反馈数据信息发送给 BlockGenerator. 这样一来,在 spark 算子对上游下个 block 数据块中的元素数量将会收到限制  ([§4.4](https://docs.google.com/document/d/1ZhiP_yBHcbjifz8nJEyPJpHqxB1FT6s8-Zk7sAfayQw/edit#heading=h.4d34og8), 3.).
+
+  
+* 5）When several DStreams are invoked, there are an equal number of independent back-pressure signals involoved. 
+* 5) 当 DStream 根据上游数据流而构建多个实例的时候, 系统中会为每个 DStream 构建一个与其一一对应的反压信号量收发模块.
+
+### 8 Concrete code changes 
+### 8 (增加反压机制特性后)牵涉到的代码变动
+
+* Our planned transmission pipeline reuses the existing actor transport from the ReceiverTracker to the ReceiverSupervisor (e.g. look at the existing RegisterReceiver message), only adding one message (Request) in the other direction. 
+* <b>我们计划复用系统中已有的 ReceiverTracker 与 ReceiverSupervisor 二者之间通信所使用的 actor 消息传输模块来作为传输管道(例如, 你可以参考下 RegisterReceiver 所处理(收发)的消息字段格式), 我们只在消息模块中的发送端增加了请求/Request 新的消息结构.</b>
+ 
+* Our Publisher is a member of JobScheduler. and a class that extends StreamingListener && collects signals from onBatchCompleted to know when to tally processing times (using the helpers of JobSet). Another alternative - probably cleaner, but lowere level - is to register that class to the JobScheduler's listenerBus. 
+* 在我们的升级方案中，将反压信号量的数据发布模块以成员变量的方式加入到 JobScheduler 中, 通过继承 StreamingListener 这个流监听基类并且通过重写基类中 onBatchCompleted 此方法来实现记录计算阶段的起始时间（借助于 JobSet 中提供的信息）```JobSet(time: Time, jobs: Seq[Job])```，并在起始时间段内收集反压信号量. 而作为这个升级方案的另一个备选方案或许更容易理解,但变动也更加底层 - 直接将实现的类到 JobScheduler 的 listenerBus 中进行注册,来完成类似功能. 
+
+* Finally, the number of elements should (instead of running a count job) be found in ReceivedBlockInfo's numRecords. Beware of PRs [#5533](https://github.com/apache/spark/pull/5533) and [#5680](https://github.com/apache/spark/pull/5680) that are likely to change that shortly. 
+
+* 所记录下的元素的数量最终可在ReceivedBlockInfo 类中的 numRecords 这一成员变量中查询到(而不是运行一个记录的后台作业来进行元素数量的统计). 详细变动请关注 PRs [#5533](https://github.com/apache/spark/pull/5533) 和 [#5680](https://github.com/apache/spark/pull/5680) 这两个提交代码,近期内有可能会有变动. 
 
 
+### API Design for congestion management stategies 
+### 阻塞管控策略模块的 API 设计
+
+* The intended API is the following:
+* (在我们的设计方案中)意图实现如下这样的 API
+
+```
+/**
+ Called on every batch interval with the estimated maximum number of elements per block that can be processed in a batch interval, based on the processing speed observed over the last batch. 
+*/
+/**
+ 这个 onBlockBoundUpdate 方法每个 batch 批次中都会被调用,其通过计算观察到的上个批次中元素被处理的速度, 来估算出每个 block 在每个 batch 批次中所能够容纳的最大元素数量, 
+*/
+def onBlockBoundUpdate(bound:Int)
+
+/**
+Given data buffers intended for a block, and for the following block mutates those buffers to an amount appropriate with respect to the back-pressre information provided through `onBlockBoundUpdate`.
+*/
+/**
+这个 restrictCurrentBuffer 方法被当前数据块所调用后会将调用 `onBlockBoundUpdate` 方法来获取的反压信号量数值作为参考, 根据更新后的数据块需要内存空间大小来从缓冲空间中进行调整.
+就是为当前的 block 因为反压信号量更新后, 空间大小有变动, 从总的内存空间(Buffer) 中更新当前 block 缓存空间的大小, 申请新空间的话不能让 block 使用占用全部的内存缓冲区的空间, 如果是 block 变小的话, 或许会将自身的部分缓冲区回归给总的内存空间，如果真有归还的话也会涉及到原有空间的 Buffer 整理相关. 例如 Buffer.append(归还的空间)等等.    
+*/
+def restrictCurrentBuffer(currentBuffer:ArrayBuffer[Any], nextBuffer:ArrayBuffer[Any])
+```
+
+* The implementation involves calling restrictCurrentBuffer during the execution of BlockGenerator.updateCurrentBuffer ( and alas exposes its type).
+* 实现中大概是, 在 BlockGenerator.updateCurrentBuffer 方法调用期间,每次调用都会根据反压信号量来调整内存缓冲区大小数值, 在数值更新后通过调用 restrictCurrentBuffer 这个方法来实际执行从缓冲区中划出一部分内存空间来存放 block 数据. 
 
 
-
-
-
+* The choice of congestion strategy (among existing implementations) would be an optinal configuration parameter of a DStream. 
+* 而上述的阻塞策略是否开启 (在将该功能加入到系统中之后) 可以通过对外设置一个 SparkConf 的配置项, 并在 DStream 中检查该配置参数来决定是否开启应对阻塞的相关处理策略.
 
 
 
