@@ -1,4 +1,4 @@
-package com.spark.aimer.exactlyonce.kafka
+package com.spark.aimer.kafka
 
 import java.text.SimpleDateFormat
 import java.util.{Date, Properties}
@@ -14,9 +14,8 @@ import org.apache.kafka.common.serialization.StringSerializer
   * Created by Aimer1027 on 2018/9/19.
   */
 object Producer {
-
   def main(args: Array[String]): Unit = {
-    val brokers = ""
+    val brokers = "kafka-broker-list"
     val topic = "dasou-in"
     val props = new Properties()
     props.put("metadata.broker.list", brokers)
@@ -25,16 +24,16 @@ object Producer {
     props.put("request.required.acks", "1")
     props.put("key.serializer", classOf[StringSerializer])
     props.put("value.serializer", classOf[StringSerializer])
-    props.put("partitioner.class", classOf[com.spark.aimer.exactlyonce.kafka.MyHashPartitioner])
+    props.put("partitioner.class", classOf[com.spark.aimer.kafka.MyHashPartitioner])
 
     val kafkaProducer = new KafkaProducer[String, String](props)
     var id: Int = 1
     val timestampFormat: SimpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
-
     while (true) {
       val kafkaIndexKey = s"${id}"
-      val kafkaMsgStr = msg2Str(new KafkaMsgBean(kafkaIndexKey, "msg content", timestampFormat.format(new Date)))
+      val kafkaMsgStr = msg2Str(new KafkaMsgBean(kafkaIndexKey,
+        "msg content", timestampFormat.format(new Date)))
       kafkaProducer.send(new ProducerRecord[String, String](topic, kafkaIndexKey, kafkaMsgStr),
         new KafkaProducerCallBack)
       Thread.sleep(1000)

@@ -1,7 +1,7 @@
 package com.spark.aimer.exactlyonce.streaming
 
 import com.alibaba.fastjson.{JSON, JSONObject}
-import com.spark.aimer.exactlyonce.kafka.Producer.KafkaMsgBean
+import com.spark.aimer.kafka.Producer.KafkaMsgBean
 import com.spark.aimer.exactlyonce.zk.{ZkPartitionOffsetHandler, ZkPartitionOffsetParser}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition

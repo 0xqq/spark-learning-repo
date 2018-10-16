@@ -1,4 +1,4 @@
-package com.spark.aimer.exactlyonce.kafka
+package com.spark.aimer.kafka
 
 import java.util
 
