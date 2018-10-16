@@ -42,9 +42,9 @@ drwxr-xr-x   2 xxx xxx         0 2018-10-17 01:33 /app/business/haichuan/cbc/aim
 
 * <b>备选方案 2</b>: 自行实现 Hadoop API 再通过 foreachWriter 方法来调用, 因为 spark 自身 task 失败重试有可能会因为数据写入不幂等的情况, 且开发成本较大最后考虑
 
-* <b>kafka2hdfs</b> 这个过程中,需要将 kafka 中在某个时间段内的全部数据全部获取, 并不符合 kafka 提供 API 的特点, 这种全局获取数据的方式应该放到 spark  计算引擎中来而不是外存中, pass 
+* <b>备选方案 3 kafka2hdfs</b> 这个过程中,需要将 kafka 中在某个时间段内的全部数据全部获取, 并不符合 kafka 提供 API 的特点, 这种全局获取数据的方式应该放到 spark  计算引擎中来而不是外存中, pass 
 
-* <b>通过变量来实时修改路径地址</b> 可行,这种方法正在测试中, 如果正常将会每隔一个时间周期指定一个新的时间戳格式的路径地址, 而类似 part-xxx.csv 这种并行写入的文件便可以归属到同一个时间段的时间戳文件夹下 
+* <b>备选方案 4 通过变量来实时修改路径地址</b> 已经证明可行,[KafkaSourceToHdfsSink](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/structured/sink/KafkaSourceToHdfsSink.scala) 这种方法正在测试中, 如果正常将会每隔一个时间周期指定一个新的时间戳格式的路径地址, 而类似 part-xxx.csv 这种并行写入的文件便可以归属到同一个时间段的时间戳文件夹下 
 
 通过将获取当前时间戳方法调用作为路径名称进行替代后, 能够得到写入数据的格式如下, 值得注意的是, 在这里需要根据实际需求来对生成时间戳
 的函数进行升级, 同时也需要考虑到 trigger 触发周期时间对实际时间戳生成影响等等
