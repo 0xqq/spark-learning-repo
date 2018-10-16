@@ -45,3 +45,20 @@ drwxr-xr-x   2 xxx xxx         0 2018-10-17 01:33 /app/business/haichuan/cbc/aim
 * <b>kafka2hdfs</b> 这个过程中,需要将 kafka 中在某个时间段内的全部数据全部获取, 并不符合 kafka 提供 API 的特点, 这种全局获取数据的方式应该放到 spark  计算引擎中来而不是外存中, pass 
 
 * <b>通过变量来实时修改路径地址</b> 可行,这种方法正在测试中, 如果正常将会每隔一个时间周期指定一个新的时间戳格式的路径地址, 而类似 part-xxx.csv 这种并行写入的文件便可以归属到同一个时间段的时间戳文件夹下 
+
+通过将获取当前时间戳方法调用作为路径名称进行替代后, 能够得到写入数据的格式如下, 值得注意的是, 在这里需要根据实际需求来对生成时间戳
+的函数进行升级, 同时也需要考虑到 trigger 触发周期时间对实际时间戳生成影响等等
+
+```$xslt
+./bin/hadoop fs -ls /app/business/haichuan/cbc/aimer/spark_output_data/
+drwxr-xr-x   2 xxx xxx          0 2018-10-17 02:07 /app/business/haichuan/cbc/aimer/spark_output_data/20181017020656
+drwxr-xr-x   2 xxx xxx          0 2018-10-17 02:19 /app/business/haichuan/cbc/aimer/spark_output_data/20181017021907
+drwxr-xr-x   2 xxx xxx          0 2018-10-17 01:34 /app/business/haichuan/cbc/aimer/spark_output_data/data.csv
+drwxr-xr-x   2 xxx xxx          0 2018-10-17 01:36 /app/business/haichuan/cbc/aimer/spark_output_data/parquet.csv
+
+
+./bin/hadoop fs -ls /app/business/haichuan/cbc/aimer/spark_output_data/20181017020656
+drwxr-xr-x   2 xxx xxxx          0 2018-10-17 02:06 /app/business/haichuan/cbc/aimer/spark_output_data/20181017020656/_spark_metadata
+-rw-r--r--   3 xxx xxx        419 2018-10-17 02:07 /app/business/haichuan/cbc/aimer/spark_output_data/20181017020656/part-00000-bed75a40-2e9c-49eb-8296-fde0d2700a6d-c000.snappy.parquet
+
+```
