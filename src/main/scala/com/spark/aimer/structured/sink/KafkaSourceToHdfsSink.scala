@@ -30,7 +30,7 @@ import org.apache.spark.sql.streaming.{OutputMode, Trigger}
   *
   * 1. 是否能够支持根据时间戳来切割文件
   * 2. 是否能够根据时间戳来生成对应路径下的文件
-  * 详细文档描述, 参考 [sinker.md]()
+  * 详细文档描述, 参考 [sinker.md](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/structured_streaming_notes/sinker.md)
   **/
 
 object KafkaSourceToHdfsSink extends Logging {
