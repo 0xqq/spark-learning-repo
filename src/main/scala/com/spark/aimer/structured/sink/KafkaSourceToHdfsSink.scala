@@ -75,12 +75,11 @@ object KafkaSourceToHdfsSink extends Logging {
 
     kafkaDF.
       writeStream.
-      format("delta").
+      //format("delta").  I tries this delta， but only databricks spark supports this semantics / TVT
+      format("csv").
       option("checkpointLocation", "/app/business/haichuan/cbc/aimer/").
-      option("path", s"/app/business/haichuan/cbc/aimer/spark_output_data2/").
+      option("path", s"/app/business/haichuan/cbc/aimer/spark_output_data2/${get_timestamp}").
       trigger(Trigger.ProcessingTime(5L, TimeUnit.SECONDS)).
       start
   }
 }
-
-
