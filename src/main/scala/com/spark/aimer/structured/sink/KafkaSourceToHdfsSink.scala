@@ -43,8 +43,6 @@ object KafkaSourceToHdfsSink extends Logging {
     (id, msg, timestamp)
   }
 
-
-
   case class HdfsData(id:String, msg:String, timestamp:String)
 
   def main(args:Array[String]) = {
