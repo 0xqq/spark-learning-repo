@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 
 import com.alibaba.fastjson.{JSON, JSONObject}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 
 /**
@@ -43,20 +43,16 @@ object KafkaSourceToHdfsSink extends Logging {
     (id, msg, timestamp)
   }
 
-  def get_timestamp():String = {
-    val timestampFormat: SimpleDateFormat = new SimpleDateFormat("yyyyMMddHHmmss")
-    val timestampStr = timestampFormat.format(new Date)
-    timestampStr
-  }
+
 
   case class HdfsData(id:String, msg:String, timestamp:String)
 
   def main(args:Array[String]) = {
     val kafkaTopic = "dasou-stream"
-    val broker = ""
+    val broker = "10.99.217.95:8092,10.99.217.101:8092,10.99.199.26:8092,10.99.199.27:8092,10.99.199.25:8092"
     val spark = SparkSession.builder().appName("KafkaSourceToHdfsSink").getOrCreate()
     import spark.implicits._
-    val kafkaDF = spark.
+    val kafkaDF:DataFrame = spark.
       readStream.
       format("kafka").
       option("kafka.bootstrap.servers", broker).
@@ -70,11 +66,18 @@ object KafkaSourceToHdfsSink extends Logging {
 
     kafkaDF.printSchema()
 
+
+    def get_timestamp():String = {
+      val timestampFormat: SimpleDateFormat = new SimpleDateFormat("yyyyMMddHH")
+      val timestampStr = timestampFormat.format(new Date)
+      timestampStr
+    }
+
     kafkaDF.
       writeStream.
-      format("parquet").
+      format("delta").
       option("checkpointLocation", "/app/business/haichuan/cbc/aimer/").
-      option("path", s"/app/business/haichuan/cbc/aimer/spark_output_data/${get_timestamp}").
+      option("path", s"/app/business/haichuan/cbc/aimer/spark_output_data2/").
       trigger(Trigger.ProcessingTime(5L, TimeUnit.SECONDS)).
       start
   }

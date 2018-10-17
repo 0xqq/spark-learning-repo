@@ -45,9 +45,12 @@ drwxr-xr-x   2 xxx xxx         0 2018-10-17 01:33 /app/business/haichuan/cbc/aim
 * <b>备选方案 3 kafka2hdfs</b> 这个过程中,需要将 kafka 中在某个时间段内的全部数据全部获取, 并不符合 kafka 提供 API 的特点, 这种全局获取数据的方式应该放到 spark  计算引擎中来而不是外存中, pass 
 
 * <b>备选方案 4 通过变量来实时修改路径地址</b> 已经证明可行,[KafkaSourceToHdfsSink](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/structured/sink/KafkaSourceToHdfsSink.scala) 这种方法正在测试中, 如果正常将会每隔一个时间周期指定一个新的时间戳格式的路径地址, 而类似 part-xxx.csv 这种并行写入的文件便可以归属到同一个时间段的时间戳文件夹下 
+  通过将获取当前时间戳方法调用作为路径名称进行替代后, 能够得到写入数据的格式如下, 值得注意的是, 在这里需要根据实际需求来对生成时间戳
+  的函数进行升级, 同时也需要考虑到 trigger 触发周期时间对实际时间戳生成影响等等
+  
+* <b>备选方案 5 将上游数据以 10 分钟粒度同步至 mysql 的表中</b>: 然后自行实现一个 CT 定时任务, 周期性地把写入到 mysql 中的数据按照时间戳粒度 select 出来，然后通过 FileSystem HDFS API 将数据写入到 hdfs 的时间戳为前缀的 hdfs 路径下的 1 个文件中
 
-通过将获取当前时间戳方法调用作为路径名称进行替代后, 能够得到写入数据的格式如下, 值得注意的是, 在这里需要根据实际需求来对生成时间戳
-的函数进行升级, 同时也需要考虑到 trigger 触发周期时间对实际时间戳生成影响等等
+
 
 ```$xslt
 ./bin/hadoop fs -ls /app/business/haichuan/cbc/aimer/spark_output_data/
@@ -62,3 +65,15 @@ drwxr-xr-x   2 xxx xxxx          0 2018-10-17 02:06 /app/business/haichuan/cbc/a
 -rw-r--r--   3 xxx xxx        419 2018-10-17 02:07 /app/business/haichuan/cbc/aimer/spark_output_data/20181017020656/part-00000-bed75a40-2e9c-49eb-8296-fde0d2700a6d-c000.snappy.parquet
 
 ```
+
+###  问题目前进展
+方案 2, 4, 5 目前为可行方案, 且在查询资料的过程中发现 databricks 中尚未开源 的 ```writeStream.format("delta")``` 用于周期性地写入大文件
+但是该方法尚未开源, spark 是 databricks 的 spark, hdfs 是 databricks 的 HDFS, 不过通过这个信息也间接表明目前方法中并无类似 delta 功能的方法, 
+不然的话，也不会专门开发一个 delta 的功能呢, [相关文档请见链接](https://docs.databricks.com/delta/delta-intro.html) 
+
+
+方案 4 中因为 stream 在写入数据的时候回维护一个 _spark_metadata 这个记录全局信息的元数据文件路径, 
+每次到来批次的数据作为局部数据 + 全局局部信息进行计算更新得到本次计算结果
+如果在计算的过程中，更换了 _spark_metadata 的路径地址, 会导致全局信息丢失, 从而会对计算结果造成干扰,
+或是 Spark 直接加载上次 _spark_metadata 中的数据信息
+而找不到文件而导致抛异常
