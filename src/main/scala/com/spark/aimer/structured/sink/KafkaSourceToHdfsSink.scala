@@ -49,7 +49,7 @@ object KafkaSourceToHdfsSink extends Logging {
 
   def main(args:Array[String]) = {
     val kafkaTopic = "dasou-stream"
-    val broker = "10.99.217.95:8092,10.99.217.101:8092,10.99.199.26:8092,10.99.199.27:8092,10.99.199.25:8092"
+    val broker = ""
     val spark = SparkSession.builder().appName("KafkaSourceToHdfsSink").getOrCreate()
     import spark.implicits._
     val kafkaDF:DataFrame = spark.
@@ -65,7 +65,6 @@ object KafkaSourceToHdfsSink extends Logging {
       map(rddStrToKafkaMsgBeam).toDF("id", "msg", "timestamp")
 
     kafkaDF.printSchema()
-
 
     def get_timestamp():String = {
       val timestampFormat: SimpleDateFormat = new SimpleDateFormat("yyyyMMddHH")
