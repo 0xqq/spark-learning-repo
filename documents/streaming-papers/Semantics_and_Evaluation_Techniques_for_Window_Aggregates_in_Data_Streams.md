@@ -1,6 +1,5 @@
 * 说明, 任何文章可通过 [链接](https://github.com/Kylin1027/streaming-readings/blob/master/README.md) + 手动搜索论文名称来查询到下载链接地址
 
-
 ##Semantics and Evaluation Techniques for Window Aggregates in Data Streams
 
 ##数据流中基于窗口聚合的语义与估值方法
