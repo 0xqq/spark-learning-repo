@@ -464,7 +464,7 @@ In the following, we introduce different types of windows and their expressions 
 
 
 A time-based sliding window query such as Q1 shown in Section2, is expressed with RANGE = 300 seconds, SLIDE=60 seconds and WATTR = ts. 
-基于时间的串口查询, 例如第 2 节中讨论的 Q1 查询语句, 这个语句中的查询参数表述是 RANGE=300 seconds, SLIDE=60 seconds WATTR=ts .
+基于时间的窗口查询, 例如第 2 节中讨论的 Q1 查询语句, 这个语句中的查询参数表述是 RANGE=300 seconds, SLIDE=60 seconds WATTR=ts .
 
 
 (Note that in this example, ts is the timestamp atrrbite provided by the sensors and not the arrival timestamp)
@@ -584,7 +584,7 @@ CQL 中窗口定义语义
 2.1 内部定制化的时间戳字段
 2.2 内部定制化的元组序列号
 文中提出的窗口定义语义
-1. 将串钩滑动的参照属性: 支持用户自定义
+1. 将窗口滑动的参照属性: 支持用户自定义
 2. 窗口划分切割的参照属性: 支持用户自定义
 
 SQL-99 defines a window clause for use on stored data.
@@ -679,28 +679,49 @@ Q1: SELECT seg-id, max(speed), min(speed)
                RATTR 对应的 range-attribute, 而 SATTR 对应的 slide-attribute ,
                用这两个类型的 attribute 可以分别指定 窗口跨度计量单位, 和窗口向前滑动的计量单位,例如我希望窗口跨度,也就是窗口范围是以表中的 ts 属性字段来指定的, 
                而, 每次窗口向前滑动是以数据表中的 Row 向前推动, 那么便可以使用如下的 SQL 语句
-               ```
-               Q3: SELECT seg-id, count(*)
-                   FROM   Traffic [
-                                    RANGE 300 seconds 
-                                        RATTR ts 
-                                    SLIDE 5 rows 
-                                        SATTR row-num
-                                  ]
-               Q3 SQL 语句直译: 从 Traffic 表中以属性 ts 字段作为窗口范围计量单位, 每次基于 ts 在 [执行查询时间点 -300 seconds, 执行查询时间点]
-                               范围内执行查询, 将这个时间段的 seg-id 和表中的记录条数查询出来, 并且查询持续执行, 每次向前推动 5 个记录条数
-                               注意这里窗口向前滑动的计量单位已经从 Q1 中的 seconds 时间计量单位调整成了记录条数, 而这个便是通过 SATTR(slide-attribute)来设定的
-               ```
+            
+```
+Q3: SELECT seg-id, count(*)
+    FROM   Traffic [
+    RANGE 300 seconds 
+    RATTR ts 
+    SLIDE 5 rows
+    SATTR row-num
+    ]
+```
+* Q3 SQL 语句直译: 从 Traffic 表中以属性 ts 字段作为窗口范围计量单位, 每次基于 ts 在 [执行查询时间点 -300 seconds, 执行查询时间点]
+                范围内执行查询, 将这个时间段的 seg-id 和表中的记录条数查询出来, 并且查询持续执行, 每次向前推动 5 个记录条数
+                注意这里窗口向前滑动的计量单位已经从 Q1 中的 seconds 时间计量单位调整成了记录条数, 而这个便是通过 SATTR(slide-attribute)来设定的
+               
+#### 3.3 Window-Ids and Window Extents 
+#### 3.3 窗口 ID 和 窗口范围
 
+* We propose a framework to define window semantics by mappings between window-ids and tuples in both directions. 
+* 我们建立 window-ids 与 数据流中的元组对象二者的双向映射(也就是双射)函数关系, 并以此作为提出窗口定义理论体系的基础. 
 
+* The framework consists of three functions: ```windows```, ```extent```, and ```wids```. 
+* 理论体系中包含了 3 个映射函数: windows, extent, 和 wids. (注意这三个单词是函数方法,并非专有名词,故不对其进行翻译)
 
+* In this sub-section, we describe ```windows``` and ```extent```, over a set of tuples, T, for each type of window we just discussed. 
+* 在本子章节中, 我们将基于前篇幅讨论过的每种窗口类型和一组元组集合 T 来详细介绍窗口定义理论体系中的 ```windows``` 和 ```extent``` 这两个映射函数. 
 
+* For a given window type, ```windows``` defines the window-ids to use for that type of window -- values from different domains are used as window-ids for differnt types of window. 
+* 对于给定类型的窗口, ```windows``` 函数会根据窗口类型的不同来执行不同计算逻辑最终生成 window-ids, 对于 ```windows``` 函数的实现因窗口类型不同而异,它会从构建数据流的元组/tuple中的不同维度的属性字段(domain)获取数值, 根据数值计算结果生成 window-ids 
 
+* The ```extent``` function specifies which tuples belong to the window extent denoted by a given window-id -- the mapping from window extent denoted by a given window-id -- the mapping from window-ids to tuples. 
+* ```extent``` 此函数是用来将 tuple 根据其通过 ```windows``` 函数计算得到的 window-id 数值映射到该 tuple 应属于的窗口范围(window extent)中.
+```
+小小梳理一下： 
+1. window-id 用来作为唯一标识 window-extent 的主键, 其经由 windows 函数作用于 tuple 中属性字段数值得到, 不同类型的窗口其 windows 函数计算逻辑不同
+2. window-extent: 是由一到多个构建数据流 Stream 的基本组成元素 tuple 所构成, 使用 window-id 来唯一标识, tuple 经由 extent 函数计算得到相同的 window-id 
+                  会被划归到该 window-id 所唯一标识的 window-extent 中
+3. extent:  计算函数, extent(tuple): window-id, 传入 tuple 计算出该 tuple 的 window-id 数值, 
+4. windows: 计算函数, windows( tuple ):window-id, 传入 tuple 得到该 tuple 所属于的 window-extent 的唯一标识符 window-id                 
+```
+* More precisely, given a window specification S and the set of tuples T that compose a stream, ```windows(T,S)``` is the set of window-ids that identify window extents to which tuples in T may belongs. 
+* 更确切地说, 在已知窗口定义和构建数据的一组元组 T, ```windows(T,S)``` 表示的是数据流元组集合 T 中的每个元组元素应该属于哪个窗口范围(window extents,每个 window extents 使用唯一 window id 来标识) 的多个 window-id 构成的集合.
 
-
-
-
-
+* Given 
 
 ----
 
