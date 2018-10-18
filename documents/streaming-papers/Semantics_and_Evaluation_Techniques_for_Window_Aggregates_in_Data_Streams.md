@@ -1,7 +1,9 @@
 ##Semantics and Evaluation Techniques for Window Aggregates in Data Streams
+
 ##数据流中基于窗口聚合的语义与估值方法
 
 ###Abstract 
+
 ###摘要
 
 A windowed query operator breaks a data stream into possibly overlapping subsets of data and computes results over each. 
@@ -640,6 +642,62 @@ In this paper, we only consider rank(RATTR) -- the attribute defining the slide 
 (这个地方大概是强调 SATTR 中调用的函数传入数据必须是有 RATTR 这个关键字指定的 元组.属性, 而返回的数值必须满足 SLIDE 控制窗口滑动的单位的要求, 比如说 rank(x) 
 计算得到一个 0.8 和 -100 这种数据传递给 SLIDE ？row 都是非法的, 从语义上便说不过去, 如果将 SLIDE 支持的语义中窗口移动的单位是一个数值集合 X 的话, 那么必须保证 rank 也好
 还是什么其他调用函数也好, 通过该函数所计算处理的数据集合 Y 必须是 X 的子集才行)
+
+(update date 2018/10/18)
+有一段时间没有看论文了, 本文中提到的 Q1 的流式查询 SQL 语句重新梳理下
+
+```
+Traffic table schema: 
+{
+seg-id: String, 
+speed: Double, 
+ts: Timestamp  # pattern HH:MM:SS 
+}
+
+Q1: SELECT seg-id, max(speed), min(speed)
+    FROM   Traffic [
+                    RANGE 300 seconds
+                    SLIDE 60  seconds
+                    WATTR ts
+                   ]
+    GROUP BY seg-id 
+```
+* SQL 语句直译: 
+               持续从数据表 Traffic 中 seg-id, 最大 speed 数值, 最小 speed 数值,
+               且保证每次查询中控制表中的 ts 这个属性字段所在的时间范围是 [查询发起时间 -300s, 查询发起时间] 
+               且保证时间范围的计量方式与时间范围计量方式相同(时间单位相同)
+               且每 60s 进行一次上述查询, 更新计算结果
+
+* SQL 语句解析理解: 
+               这个查询是一个基于时间属性的窗口查询, 窗口的计量单位是 seconds, 窗口时间跨度为 300 seconds,即,通过 SQL 语句中的 RANGE 关键字来标识,
+               窗口向前滑动步长是 60 seconds , 即, 通过 SQL 语句中的 SLIDE 关键字来标识, 
+               窗口的计量单位是 seconds 是通过 SQL 语句中的 WATTR 关键字来得知的, 
+               该 SQL 语句支持粒度更细的查询语义, WATTR 实则是 window-attribute 的缩写, 
+               如果希望将窗口跨度和窗口向前滑动步长分开统计查询的话, 也可以为其各自指定窗口属性类型, WATTR -> [RATTR, SATTR] 
+               RATTR 对应的 range-attribute, 而 SATTR 对应的 slide-attribute ,
+               用这两个类型的 attribute 可以分别指定 窗口跨度计量单位, 和窗口向前滑动的计量单位,例如我希望窗口跨度,也就是窗口范围是以表中的 ts 属性字段来指定的, 
+               而, 每次窗口向前滑动是以数据表中的 Row 向前推动, 那么便可以使用如下的 SQL 语句
+               ```
+               Q3: SELECT seg-id, count(*)
+                   FROM   Traffic [
+                                    RANGE 300 seconds 
+                                        RATTR ts 
+                                    SLIDE 5 rows 
+                                        SATTR row-num
+                                  ]
+               Q3 SQL 语句直译: 从 Traffic 表中以属性 ts 字段作为窗口范围计量单位, 每次基于 ts 在 [执行查询时间点 -300 seconds, 执行查询时间点]
+                               范围内执行查询, 将这个时间段的 seg-id 和表中的记录条数查询出来, 并且查询持续执行, 每次向前推动 5 个记录条数
+                               注意这里窗口向前滑动的计量单位已经从 Q1 中的 seconds 时间计量单位调整成了记录条数, 而这个便是通过 SATTR(slide-attribute)来设定的
+               ```
+
+
+
+
+
+
+
+
+
 
 
 ----
