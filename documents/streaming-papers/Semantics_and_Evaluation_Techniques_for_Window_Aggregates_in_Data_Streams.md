@@ -738,7 +738,8 @@ Q3: SELECT seg-id, count(*)
 
 
 <b>注意, 在这个地方开始进行不同窗口进行分类, 呼应本小节开头的 for each type of window we just discussed, 以及这里所说的在前文提到的不同窗口类型, 其实是对应Q1 - Q5 不同类型的 SQL 查询语句</b>
-窗口类型的逐一讨论分别是这样几个类型：
+
+* 窗口类型的逐一讨论分别是这样几个类型：
 
 ```
 1. For window queries in which RANGE and SLIDE are specified on the WATTR attribute. tumbling window 类型
@@ -813,7 +814,7 @@ Q3: SELECT seg-id, count(*)
 * The ```windows``` and ```extent``` functions for slide-by-tuple windows are given below. 
 * 元组粒度步长窗口类型中的 ```windows``` 与 ```extent``` 函数的定义描述如下:
 
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming-papers/png/window_type2.png)
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming-papers/png/type_2.png)
 
 
 * Assuming unique RATTR values, each RATTR attribute value identifies a window extent that ends at that tuple. 
