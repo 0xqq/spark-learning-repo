@@ -143,7 +143,7 @@
 > * Finally, the throttling of [SPARK-1341](https://github.com/apache/spark/pull/945) only applies when Spark is slicing the data into blocks by itself. I.e. there's no throttling possible if blocks are delivered as an Iterator. 
 > * 最后, [SPARK-1341](https://github.com/apache/spark/pull/945) 这个 JIRA 中所讨论的数据节流的方法仅仅适用于当 Spark 系统自发将自身数据切分成 block 的场景中. 这也就是说, 如果基于上游外来数据所构建的多个 block 并使用迭代器分发的这种场景下这种(SPARK-1341)限流方法是无法使用的（因为不是 Spark 自身的数据，不是自行切分构建的 block, 外加迭代器这三个不同点）. 
 
-
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/backpressure/png/backpressure1.png)
 
 ### 3. Problem
 ### 3. 问题描述
