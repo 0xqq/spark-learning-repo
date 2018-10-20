@@ -92,7 +92,7 @@ COMMENT='';
 
 ssStream. 
 format("mysql"). 
-option("jdbc","jdbc:mysql://10.99.202.205:8998/sparkdata")
+option("jdbc","jdbc:mysql://ip:port/sparkdata")
 option("driver", "com.mysql.jdbc.Driver")
 
 ```
@@ -122,10 +122,10 @@ option("driver", "com.mysql.jdbc.Driver")
 }
 ```
 
-* Structured Streaming Spark App 中处理数据格式:DataStream[MysqlData]
+* Structured Streaming Spark App 中处理数据格式:DataStream[ResultData]
 ```$xslt
 {
- id:String, 
+ id:String, # ${ResultData.id}-${ResultData.timestamp}
  msg:Stirng,
  timestamp:Stirng # yyyymmddHHMMSS
 }
@@ -141,22 +141,22 @@ option("driver", "com.mysql.jdbc.Driver")
 
 #### 具体实现步骤
 3. MySQL 单元测试阶段 
-* 代码实现 [DtaBaseDemoTest.scala](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/test/scala/com/spark/aimer/tests/DataBaseDemoTest.scala)
+* 代码实现 [DataBaseDemoTest.scala](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/test/scala/com/spark/aimer/tests/DataBaseDemoTest.scala)
 * 输出结果 [output.log](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/test/logs/output.log)
-3.1 向指定 MySQL 数据库中提交简单格式数据, 期待结果: 数据库连通没问题, 数据正常从 unit test 中写入数据表中
-3.1 结果:正常写入数据库, 连接成功
-3.2 验证当先后提交的两条数据的主键相同时, 后一次提交中确实会跑出异常并将异常截获, 期待结果: 后一次提交异常能够被截获
-3.2 结果: 抛出异常, 第二个提交的记录没有成功写入, 第一条成功写入
-3.3 开启事务提交, 同样提交两条数据主键相同的同时,后一次提交异常中执行回滚, 期待结果: 后一次提交异常被截获, 提交数据无效
-3.3 结果: 前一次提交正常提交, 后一次提交出现异常被正常捕获后执行回滚操作
+> 3.1 向指定 MySQL 数据库中提交简单格式数据, 期待结果: 数据库连通没问题, 数据正常从 unit test 中写入数据表中
+> 3.1 结果:正常写入数据库, 连接成功
+> 3.2 验证当先后提交的两条数据的主键相同时, 后一次提交中确实会跑出异常并将异常截获, 期待结果: 后一次提交异常能够被截获
+> 3.2 结果: 抛出异常, 第二个提交的记录没有成功写入, 第一条成功写入
+> 3.3 开启事务提交, 同样提交两条数据主键相同的同时,后一次提交异常中执行回滚, 期待结果: 后一次提交异常被截获, 提交数据无效
+> 3.3 结果: 前一次提交正常提交, 后一次提交出现异常被正常捕获后执行回滚操作
 结论: 只要数据库主键字段加以设置, 最后都能保证写入 1 条数据, 无论是否加事务处理
 
 4. Structured Streaming 普通数据
 * 代码实现 [KafkaSourceToMySqlSink.scala](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/structured/sink/KafkaSourceToMySqlSink.scala)
 * 输出结果 [output.log]()
-4.0 在这里, 为了对问题进行重现, 我们设计上游 kafka 在进行数据生成的时候, 相同的记录条数生成 2 次, 记录总条数设定为 20000 条 
-4.1 实现普通模式,将数据从 kafka -> spark -> mysql 中进行提交, 最后检查数据库中写入数据的条数, 以及是否有重复数据
-4.2 实现事务提交模式, 整个数据流同上, 但在数据从 spark 通过 sinker 写入到 mysql 的阶段, 使用事务+回滚/事务+ 检查 的方式来控制重复数据 
+> 4.0 在这里, 为了对问题进行重现, 我们设计上游 kafka 在进行数据生成的时候, 相同的记录条数生成 2 次, 记录总条数设定为 20000 条 
+> 4.1 实现普通模式,将数据从 kafka -> spark -> mysql 中进行提交, 最后检查数据库中写入数据的条数, 以及是否有重复数据
+> 4.2 实现事务提交模式, 整个数据流同上, 但在数据从 spark 通过 sinker 写入到 mysql 的阶段, 使用事务+回滚/事务+ 检查 的方式来控制重复数据 
 
 
 #### references
