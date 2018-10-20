@@ -8,7 +8,7 @@ class DBOperationSuite extends FunSuite {
 
 
    test("[suite] insert one record to mysql") {
-    val url:String = "jdbc:mysql://10.99.202.205:8866/spark"
+    val url:String = "jdbc:mysql://10.99.202.215:8866/spark"
     val username:String = "dbproxy"
     val passwd:String = "dbproxy"
     val driver = "com.mysql.jdbc.Driver"
@@ -29,7 +29,7 @@ class DBOperationSuite extends FunSuite {
   }
 
    test("[suite] insert two same records to mysql") {
-    val url:String = "jdbc:mysql://10.99.202.205:8866/spark"
+    val url:String = "jdbc:mysql://10.99.202.215:8866/spark"
     val username:String = "dbproxy"
     val passwd:String = "dbproxy"
     val driver = "com.mysql.jdbc.Driver"
@@ -55,7 +55,7 @@ class DBOperationSuite extends FunSuite {
   }
 
     test("[suite] insert two same records to mysql by transaction method") {
-    val url:String = "jdbc:mysql://10.99.202.205:8866/spark"
+    val url:String = "jdbc:mysql://10.99.202.215:8866/spark"
     val username:String = "dbproxy"
     val passwd:String = "dbproxy"
     val driver = "com.mysql.jdbc.Driver"
