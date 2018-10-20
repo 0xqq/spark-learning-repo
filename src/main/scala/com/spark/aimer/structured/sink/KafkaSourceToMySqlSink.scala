@@ -19,7 +19,8 @@ import org.apache.spark.sql.{DataFrame, ForeachWriter, Row, SparkSession}
   *    在写入数据库的过程中通过事务来完成, 如果该主键已经存在, 则会出现写入失败事务回滚,
   *    通过这种方式来避免数据通过 foreach(ForeachWriter[T]) 造成的数据重复的问题
   *
-  *
+  * docs:
+  * https://github.com/Kylin1027/spark-learning-repo/tree/master/documents/structured-streaming/sinkers/mysql
   * */
 
 case class ResultData(id:String, msg:String, timestamp:String)
