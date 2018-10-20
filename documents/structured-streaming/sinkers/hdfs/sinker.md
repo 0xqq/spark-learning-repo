@@ -19,15 +19,12 @@
 3. 将数据同步至 kafka, 然后通过一个  kafka2hdfs 的 CT 程序按照时间戳进行按批次同步至 HDFS 指定时间戳的路径下
 4. (可行) 仍旧使用 FileStreamSinker 这个类中提供的方法, 并且将原有的 data.csv 文件名称使用 函数调用返回 String 来替换, 以确保返回的时间会随着当前时间的实际数值进行变动
 
-
-
 #### 执行步骤
 * 首先, 将 [Producer](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/kafka/Producer.scala) 代码中的 brokers, topic 设定为实验 kafka broker 和 topic 
 * 重新编译程序 ```mvn clean install``` 得到 xxx-with-dependencies.jar 
 * 执行  ```java -cp ./kafka.jar  com.spark.aimer.kafka.Producer``` 命令来启动 Producer 进程向 kafka 指定 topic 中推送数据
 
 ##### alternatives
-
 * <b>备选方案 1</b> 代码实现如 [KafkaSourceToHdfsSink](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/structured/sink/KafkaSourceToHdfsSink.scala) 
 * <b>备选方案 1 实际执行结果</b>: 虽然指定了文件名称为 xxx.csv 文件, 但是在实际运行中产出结果仍旧会将设定的 xxx.csv 文件名下,每个 partition 会创建 part-*.csv 格式的文件
 
@@ -49,7 +46,6 @@ drwxr-xr-x   2 xxx xxx         0 2018-10-17 01:33 /app/business/haichuan/cbc/aim
   的函数进行升级, 同时也需要考虑到 trigger 触发周期时间对实际时间戳生成影响等等
   
 * <b>备选方案 5 将上游数据以 10 分钟粒度同步至 mysql 的表中</b>: 然后自行实现一个 CT 定时任务, 周期性地把写入到 mysql 中的数据按照时间戳粒度 select 出来，然后通过 FileSystem HDFS API 将数据写入到 hdfs 的时间戳为前缀的 hdfs 路径下的 1 个文件中
-
 
 
 ```$xslt
@@ -75,5 +71,4 @@ drwxr-xr-x   2 xxx xxxx          0 2018-10-17 02:06 /app/business/haichuan/cbc/a
 方案 4 中因为 stream 在写入数据的时候回维护一个 _spark_metadata 这个记录全局信息的元数据文件路径, 
 每次到来批次的数据作为局部数据 + 全局局部信息进行计算更新得到本次计算结果
 如果在计算的过程中，更换了 _spark_metadata 的路径地址, 会导致全局信息丢失, 从而会对计算结果造成干扰,
-或是 Spark 直接加载上次 _spark_metadata 中的数据信息
-而找不到文件而导致抛异常
+或是 Spark 直接加载上次 _spark_metadata 中的数据信息, 而找不到文件而导致抛异常
