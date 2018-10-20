@@ -28,15 +28,17 @@ object Producer {
 
     val kafkaProducer = new KafkaProducer[String, String](props)
     var id: Int = 1
-    val timestampFormat: SimpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+    val timestampFormat: SimpleDateFormat = new SimpleDateFormat("yyyyMMddHHmmss")
 
     while (true) {
-      val kafkaIndexKey = s"${id}"
-      val kafkaMsgStr = msg2Str(new KafkaMsgBean(kafkaIndexKey,
-        "msg content", timestampFormat.format(new Date)))
-      kafkaProducer.send(new ProducerRecord[String, String](topic, kafkaIndexKey, kafkaMsgStr),
-        new KafkaProducerCallBack)
-      Thread.sleep(1000)
+        val kafkaIndexKey = s"${id}"
+        val kafkaMsgStr = msg2Str(new KafkaMsgBean(kafkaIndexKey,
+          "msg content", timestampFormat.format(new Date)))
+      for ( index <- (0 to 2)) {
+        kafkaProducer.send(new ProducerRecord[String, String](topic, kafkaIndexKey, kafkaMsgStr),
+          new KafkaProducerCallBack)
+        Thread.sleep(1000)
+      }
       id += 1
     }
 

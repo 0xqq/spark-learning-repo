@@ -1,10 +1,6 @@
-package com.spark.aimer.structured
+package com.spark.aimer.structured.demo
 
-import java.util.concurrent.TimeUnit
-
-import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.streaming.Seconds
-import scala.concurrent.duration.Duration
+import org.apache.spark.sql.SparkSession
 
 /**
   * Created by Aimer1027 on 2018/9/20.
@@ -33,9 +29,9 @@ object KafkaStructuredStreamApp {
         $"partition",
         $"offset")
 
-    import org.apache.spark.sql.streaming.OutputMode
-    import org.apache.spark.sql.streaming.Trigger
     import java.util.concurrent.TimeUnit
+
+    import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 
     val sq = frame.writeStream.
       format("console").

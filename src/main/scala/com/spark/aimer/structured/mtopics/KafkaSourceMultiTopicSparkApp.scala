@@ -1,4 +1,4 @@
-package com.spark.aimer.structured
+package com.spark.aimer.structured.mtopics
 
 object KafkaSourceMultiTopicSparkApp {
 

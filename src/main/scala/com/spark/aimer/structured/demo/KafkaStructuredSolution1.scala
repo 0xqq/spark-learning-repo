@@ -1,10 +1,10 @@
-package com.spark.aimer.structured
+package com.spark.aimer.structured.demo
 
 import java.util.concurrent.TimeUnit
 
-import org.apache.spark.sql.streaming.{OutputMode, ProcessingTime, Trigger}
-import org.apache.spark.sql.SparkSession
 import com.alibaba.fastjson.{JSON, JSONObject}
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 
 /**
   * Created by Aimer1027 on 2018/9/21.

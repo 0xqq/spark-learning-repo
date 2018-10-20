@@ -1,10 +1,10 @@
-package com.spark.aimer.structured
+package com.spark.aimer.structured.demo
 
-import com.alibaba.fastjson.{JSON, JSONObject}
-import org.apache.spark.sql.{Encoders, SparkSession}
 import java.sql.Timestamp
 import java.util.concurrent.TimeUnit
 
+import com.alibaba.fastjson.{JSON, JSONObject}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 
 /**
