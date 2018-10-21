@@ -8,7 +8,7 @@
 * [structured streaming](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/structured/sink/KafkaSourceToMySqlSink.scala)
 
 #### 环境要求
-* spark [2.1.x,)
+* spark [2.2.x,)
 * maven 3.3.9 
 * jdk 1.8.0_171
 * kafka [0.10, 0.11]_2.11
