@@ -1,6 +1,12 @@
 ## Structured Streaming sinks to MySQL 
 
 ### 测试使用 事务 的方式来避免将重复数据推送至 mysql 表中
+
+#### 涉及到 repo 中的代码
+* [mysql unit test](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/test/scala/com/spark/aimer/tests/DataBaseDemoTest.scala)
+* [kafka producer](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/kafka/Producer.scala)
+* [structured streaming](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/structured/sink/KafkaSourceToMySqlSink.scala)
+
 #### 环境要求
 * spark [2.1.x,)
 * maven 3.3.9 
@@ -68,11 +74,25 @@ COMMENT='';
 ```
 
 #### Structured Streaming 算子计算逻辑说明 && 编译 && 启动方式说明
-* TODO 
+<b>说明: 这里需要注意的是</b>
+* 1. unit test：
+> 从本次提交之后增加了 scalatest 选项, 在正常执行 mvn clean install 的时候会自动触发 unit test 计算逻辑, 
+> 且unit test 中有连接数据库, 提交数据的相关逻辑实现, 如果数据库等相关环境没有准备就绪, 
+> 故,建议首次编译的时候使用如下命令来跳过单元测试环节
+```$xslt
+mvn clean install -DskipTests=true 
+```
+
+* 2. 环境相关的变量信息: structured app 代码中的如下信息需要替换成你自己开发环境中的配置信息, 以确保代码可以正确执行
+> 2.1 kafka broker list 
+> 2.2 kafka topic 
+> 2.3 mysql sinker url(jdbc:xxx), username, password 
+> 2.4 writeStream 中的 checkpoint 路径
+
 
 #### 问题说明
 数据在经由 ```kafka producer``` 推送至 ```Structured Streaming Spark App``` 进行计算, 最终经由自己实现 ```ForeachWriter MySQLSinker```
-将数据推送至 Mysql 数据库表的时候会出现相同数据数据重复写入的情况. 
+将数据推送至 Mysql 数据库表的时候会出现相同数据数据重复写入的情况, 现希望将去重逻辑放到 mysql 提交数据的特点来完成对重复数据去重
 
 #### 问题分析
 
@@ -130,7 +150,8 @@ option("driver", "com.mysql.jdbc.Driver")
  timestamp:Stirng # yyyymmddHHMMSS
 }
 ```
-* mysql 数据表 sparkdata1 数据格式
+* mysql 数据表 db:spark table: data1/data2 两个数据表的 schema 格式相同, 
+* data1 作为普通 mysql sink 数据源, data2 作为事务 mysql sink 数据源
 ```$xslt
 { 
   id:Stirng , # primary key not auto-incremental && not auto-generated 
@@ -151,13 +172,59 @@ option("driver", "com.mysql.jdbc.Driver")
 > 3.3 结果: 前一次提交正常提交, 后一次提交出现异常被正常捕获后执行回滚操作<p/>
 结论: 只要数据库主键字段加以设置, 最后都能保证写入 1 条数据, 无论是否加事务处理
 
-4. Structured Streaming 普通数据
+4. Structured Streaming 推送数据
 * 代码实现 [KafkaSourceToMySqlSink.scala](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/structured/sink/KafkaSourceToMySqlSink.scala)
-* 输出结果 [output.log]()
-> 4.0 在这里, 为了对问题进行重现, 我们设计上游 kafka 在进行数据生成的时候, 相同的记录条数生成 2 次, 记录总条数设定为 20000 条<p/> 
+> 4.0 在这里, 为了对问题进行重现, 我们设计上游 kafka 在进行数据生成的时候, 相同的记录条数生成 2 次, 不对记录条数进行限定 条<p/> 
 > 4.1 实现普通模式,将数据从 kafka -> spark -> mysql 中进行提交, 最后检查数据库中写入数据的条数, 以及是否有重复数据<p/>
-> 4.2 实现事务提交模式, 整个数据流同上, 但在数据从 spark 通过 sinker 写入到 mysql 的阶段, 使用事务+回滚/事务+ 检查 的方式来控制重复数据<p/> 
+> 4.1 输出结果
+```$xslt
+output:
+Exception is Duplicate entry '46-20181021152318' for key 'PRIMARY' 
+# 虽然这里抛出异常, 但同 PRIMARY key 的 1 条数据可写入数据库, 
+# 由于数据库主键的控制, 虽然没有加事务控制, 写入数据也能保证没有重复
+18/10/21 15:23:22 WARN DFileSystem: Delete src not found! path: /xxx/checkpointPath/commits/.73018576-7783-4b55-8fc4-e2e67ed5e2f3.tmp
+18/10/21 15:23:22 WARN ProcessingTimeExecutor: Current batch is falling behind. The trigger interval is 10 milliseconds, but spent 1491 milliseconds
 
+db data1 表中部分数据
+id                  msg         timestamp
+38-20181021152254	msg content	20181021152254
+39-20181021152257	msg content	20181021152257
+```
+
+> 4.2 实现事务提交模式, 整个数据流同上, 但在数据从 spark 通过 sinker 写入到 mysql 的阶段, 使用事务+回滚/事务+ 检查 的方式来控制重复数据<p/> 
+> 4.2 输出结果
+```$xslt
+output:
+18/10/21 15:40:30 WARN ProcessingTimeExecutor: Current batch is falling behind. The trigger interval is 10 milliseconds, but spent 1538 milliseconds
+18/10/21 15:40:31 WARN HDFSFileSystem: Delete src not found! path: /xxx/xxx/checkpoint/offsets/.32b850a8-2895-4d48-b2bd-e5fdfdc80c8c.tmp
+Exception is Duplicate entry '389-20181021154028' for key 'PRIMARY'
+Exception is Duplicate entry '389-20181021154028' for key 'PRIMARY'
+18/10/21 15:40:32 WARN HDFSFileSystem: Delete src not found! path: /xxx/xxxx//checkpoint/commits/.ae2db384-2854-4496-a907-8983e4afff22.tmp
+
+db data2 表中部分数据
+381-20181021154004	msg content	20181021154004
+382-20181021154007	msg content	20181021154007
+383-20181021154010	msg content	20181021154010
+384-20181021154013	msg content	20181021154013
+385-20181021154016	msg content	20181021154016
+386-20181021154019	msg content	20181021154019
+387-20181021154022	msg content	20181021154022
+388-20181021154025	msg content	20181021154025
+389-20181021154028	msg content	20181021154028
+390-20181021154031	msg content	20181021154031
+391-20181021154034	msg content	20181021154034
+392-20181021154037	msg content	20181021154037
+393-20181021154040	msg content	20181021154040
+```
+
+#### 最终结论
+* 1. 只要将同步数据内容和数据库表主键适当建立映射关系, 每次在 sink 中提交数据的时候通过主键便可控制数据重复写入
+* 2. 测试中尚未发现因 structurd streaming 自身处理逻辑不当这种, 因计算造成数据重复提交的问题
+* 3. 在 ForeachWriter 中 事务 + 回滚 的方式和主键普通提交方式效果相同
+* 4. 如果下游数据表中的主键字段无法随意改动, 可通过适当增加 sql 语句复杂度 通过创建中间数据表, 并创建中间临时表主键与数据写入表主键建立外键的关系, 通过外键来约束数据写入重复的问题,
+   如果情况允许, 也可使用在数据目的表中增加冗余字段,用该冗余字段映射写入记录生成的全表唯一 ID 即,UUID, 每次写入之前通过事务将数据写入表加锁, 然后检测表中冗余字段是否存在数值重复, 
+   若不重复, 写入, 事务提交
+   若存在重复, 则不写入, 在这里事务起到的是加写锁的作用, 而并非用于回滚是有区别于方法 3 中事务的使用 
 
 #### references
 [Spark Streaming Crash 如何保证 Exactly Once Semantics](https://www.jianshu.com/p/885505daab29)
