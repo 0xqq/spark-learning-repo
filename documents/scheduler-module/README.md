@@ -1,1 +1,0 @@
-TODO: scheduler module notes
