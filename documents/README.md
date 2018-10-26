@@ -4,7 +4,7 @@
 
 * 3. 9 月份问题列表中, 使用 zk 作为 external storage 存放 spark-streaming 消费进度 offset 数值, [地址链接地址](https://github.com/Kylin1027/spark-learning-repo/tree/master/src/main/scala/com/spark/aimer/exactlyonce)
 
-* 4. 10 月份问题列表中, 使用 structured kafka-spark-{mysql|kafka|HDFS} sink 编程示例的[地址链接](https://github.com/Kylin1027/spark-learning-repo/tree/master/src/main/scala/com/spark/aimer/structured/sink)
+* 4. 10 月份问题列表中, 使用 structured kafka-spark-{mysql|kafka|HDFS} sink 编程示例的[地址链接](https://github.com/Kylin1027/spark-learning-repo/tree/master/src/main/scala/com/spark/aimer/structured/sink) && [documents](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/structured-streaming/sinkers/)
 
 * 5. 上述所有上游数据提供方 kakfa producer [链接地址](https://github.com/Kylin1027/spark-learning-repo/tree/master/src/main/scala/com/spark/aimer/kafka)
 
