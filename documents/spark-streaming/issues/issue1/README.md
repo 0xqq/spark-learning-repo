@@ -26,7 +26,7 @@
 执行上述方法之后, 继续在 linux 上进行本地(--master local[*])测试
 
 * 上游 kafka 发送数据量总量为 800w 条, 5 个节点, topic partition=5，replica=2, 写入过程中 Thread.sleep(0)
-* 堆栈空间未见上升, 始终维持在日志文件 [driver-jvm.log](https://github.com/Kylin1027/spark-streaming-repo/blob/master/doc/log-info/aimer-driver-spark.log)
+* 堆栈空间未见上升, 始终维持在日志文件 [driver-jvm.log](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/spark-streaming/issues/issue1/log-info/aimer-driver-spark.log)
 * 运行时间 1 小时左右程序卡死, 卡死前异常信息如下
 
 ```
