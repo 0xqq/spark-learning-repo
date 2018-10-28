@@ -62,7 +62,7 @@ COLLATE=utf8_general_ci
 COMMENT='';
 ```
 * step3: execute spark submitting commands like ```./bin/spark-submit --master {local[*]|spark://ip:port|yarn-cluster|yarn-client} ./compiled-jar.jar``` to submit your application to local,standalone or yarn cluster 
-* NOTE: in mysql sink demo, we tried two ways to sink data from spark to mysql in case of duplicating data insertion
+* NOTE: in mysql sink demo, we tried two ways to sink data from spark to mysql in case of duplicating data insertion, and both of them can work
 * > method1: we use the id as the primary key in mysql table, and make sure that the id in kafka producer is unique, because RMDB doesn't allowed two records which with the same primary key insert to one table, 
   so only one of the records which with the same id/primary-key-value is allowed to sink to mysql table 
 * > method2: we use the transaction && rollback these mysql database features to prevent mysql sinker to receiving duplicated data records 
