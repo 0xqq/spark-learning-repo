@@ -6,7 +6,7 @@
 
 ### How to invoke kafka to generate upstreaming data 
 
-* step1: create a topic in kafka cluster or updating the schema of the kafka producer, for now, kafka producing data in schema like this 
+* step1: create a topic in kafka cluster and updating the schema of the kafka producer, for now, kafka producing data in schema like this 
 ```
 {
  "id":String,
