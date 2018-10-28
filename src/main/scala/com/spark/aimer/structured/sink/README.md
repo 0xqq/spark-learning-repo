@@ -15,9 +15,9 @@
 }
 ```
 * step2: modify the <b>brokers</b> and <b>topic</b> in [Producer](https://github.com/Kylin1027/spark-learning-repo/blob/master/src/main/scala/com/spark/aimer/kafka/Producer.scala) 
-* step3: compile this project by executing ```mvn clean install -DskipTests=true``` (some unit tests are added, you have to skip unit tests by -DskipTests=true)
+* step3: compile this project by executing ```mvn clean install -DskipTests=true``` (some unit tests are added, you have to skip unit tests by adding this maven option -DskipTests=true)
 * step4: execute commands ```java -cp ./target/learn-spark-jar-with-dependencies.jar  com.spark.aimer.kafka.Producer``` to let kafka producing data  
-* step5: part of the data producing by Producer 
+* step5: part of the data produced by Producer 
 ```
 381-20181021154004	msg content	20181021154004
 382-20181021154007	msg content	20181021154007
