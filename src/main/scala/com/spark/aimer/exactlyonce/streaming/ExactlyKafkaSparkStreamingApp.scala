@@ -50,8 +50,8 @@ object ExactlyKafkaSparkStreamingApp {
     * load OffsetRange's from external storage
     * here we use the zookeeper as the ''external storage''
     *
-    * @param topicPartitionNumMap in this map key name of the topic , value is the partition number that how many
-    *                             partitions in total under this topic in kafka cluster
+    * @param topicPartitionNumMap in this map name of the topic will be used as the key ,
+    *                             value is the partition number that how many partitions in total under this topic in kafka cluster
     * @return Map[TopicPartition,Long] in this map , TopicPartition can contain the info which topic ,
     *         and which partition and the Long can contain the partition's offset value = untilOffset - fromOffset
     **/
