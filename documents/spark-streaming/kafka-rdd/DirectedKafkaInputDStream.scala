@@ -12,6 +12,9 @@ import org.apache.spark.streaming.kafka.KafkaCluster.LeaderOffset
 import org.apache.spark.streaming.{StreamingContext, Time}
 import org.apache.spark.streaming.dstream._ 
 
+// Reference: https://github.com/koeninger/spark-1/tree/kafkaRdd/external/kafka/src/main/scala/org/apache/spark/streaming/kafka
+
+
 // A stream of {@link org.apache.spark.streaming.kafka.KafkaRDD} where each given Kafka topic/partition corresponds to an RDD partition.
 // 对于由 KafkaRDD 对象所构成的数据流中, KafkaRDD 建立了 Kafka 指定 topic 及其下的 partition 与 RDD 分区二者之间的关联. 
 
