@@ -16,7 +16,7 @@ import org.apache.spark.streaming.receiver.Receiver
 import org.apache.spark.util.Utils 
 
 // Input stream that pulls messages from a Kafka Broker.
-// KafkaInputDStream 对象抽象定义了从 Kafka Broker 拉取数据后而构建的 InputDStream 对象
+// KafkaInputDStream 对象抽象定义了从 Kafka Broker 拉取数据后而构建的 InputDStream 这个过程中调用的方法和执行的逻辑
 
 // @param kafkaParams Map of kafka configuration parameters.
 // @param kafkaParams 这个参数中存放的是 kafka 定制化的配置信息
@@ -33,7 +33,7 @@ class KafkaInputDStream [
     K:ClassTag, // 传入 key 的类类型
     V:ClassTag, // 传入 value 的类类型
     U <: Decoder[_]:ClassTag, // 传入实现了/继承了 Decoder[T] 的类的类型, U 将作为 key 的解码器, 
-    T <: Decoder[_]:ClassTag] ( // 传入实现/继承了 Decoder[T] 的类的类型, T 将作为 value 的解码器, 通常用在将数据进行反序列化的时候
+    T <: Decoder[_]:ClassTag] ( // 传入实现/继承了 Decoder[T] 的类的类型, T 将作为 value 的解码器, 通常用在从网络中接收到编码数据并对其进行解码的时候
     @transient ssc_ : StreamingContext,  // 序列化的时候我们跳过 ssc_:StreamingContext 对象的话, 就会在这个传入参数上加个 @transient 
     kafkaParams:Map[String, String], /
     topics:Map[String,Int],
@@ -206,11 +206,12 @@ class KafkaInputDStream [
 
             		val msgAndMetadata = streamIterator.next() 
 
-            		// 这里的 store 方法的实现逻辑是放到了 KafkaInputDStream 所继承的父类 Receiver[(K,V)] 这个类中的
+            		// 这里的 store 方法的实现逻辑是放到了 KafkaReceiver 所继承的父类 Receiver[(K,V)] 这个类中的
             		// 需要注意的是 Receiver 这里关于泛型的定义, 它的泛型是一个由 K 和 V 构成的元组类型作为泛型整体的
             		// 所以在这里也能看到的是 store 函数调用的是将 msgAndMetadata.key 键 和 msgAndMetadata.value 的值
             		// 所构成的元组传入到 store 函数方法中, 同时通过参数类型是一样的也可以判断出 store 这个方法是出自于 Receiver[(K,V)] 这个父类中
-            		// 在看过 Receiver 类中所有的 store 方法之后, 我觉得这里调用的 store 方法应该是这个
+            		// 在看过 Receiver 类中所有的 store 方法之后, 我觉得这里调用的 store 方法应该是这一个, 而其中 dataItem:[T] 这个泛型 T 对应的便是
+            		// （K,V） 这个由 K 和 V 构成的元组
             		/**
                        Store a single item of received data to Spark's memeory.
                        These single items will be aggregated together into data blocks before being 
