@@ -68,7 +68,7 @@ private[streaming] trait BlockGeneratorListener {
   按照一定时间间隔将从 [[org.apache.spark.streaming.receiver.Receiver]] 多个 batch 接收到的对象汇聚在一起构建成数据块.
   (原来 1 个batch 接收到的数据对象未必构建 1 个 block, 多少个 batch 构建一个 block 对象, 这个是由设定的 block.interval 这个参数来决定的.
   从之前阅读反压(backpressure) 这个设计文档来看, 这个 regular interval 应该就是参数 block.interval 这个可由 spark-conf 传参设定的数值)
-  所以, 应该是 1 block.interval = [1 - n 个 batch] , 1 block = [1 - n 个 block.interval 周期内接收到的 object 集合构成]
+  所以, 应该是 1 block.interval = [1 - n 个 batch] , 1 block = [1 - n 个 batch 时间周期内接收到的 object 集合构成]
 
   This class starts two threads, one to periodically start a new batch and prepare the previous batch of as a block,
   the other to push the blocks into the block manager. 
