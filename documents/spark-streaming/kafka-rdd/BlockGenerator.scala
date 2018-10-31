@@ -151,10 +151,10 @@ private[streaming] class BlockGenerator (
      private val blockPushingThread = new Thread { override def run() { keepPushingBlocks() } }
 
      
-     // 这个用 volatile 修饰的 currentBuffer 对它执行的写操作, 是直接落到 RAM 空间上的, 而之所以使用 volatile 关键字来修饰该变量
+     // 这个用 volatile 修饰的 currentBuffer 对它执行的写操作, 是直接落到 CPU 直接访问的 寄存器 空间上的, 而之所以使用 volatile 关键字来修饰该变量
      // 目的是防止,多个线程操作这个对象, 一个线程对该对象执行 update 更新其中数值的时候, 变动发生在内存, 这样对其进行访问的另一个线程
      // 所获取到的这个变量的数值还停留在原先的没更新的数值, 造成这种数据不一致
-     // 而有了 @volatile 这个关键字, 对数值的操作会直接更新在 RAM 上的, 占用同一块空间的所有线程都能立即察觉到数值的瞬时变动
+     // 而有了 @volatile 这个关键字, 对数值的操作会直接更新在 CPU 直接访问的寄存器 空间上的, 占用同一块空间的所有线程都能立即察觉到数值的瞬时变动
      @volatile private var currentBuffer = new ArrayBuffer[Any]
      @volatile private var state = Initialized 
 
