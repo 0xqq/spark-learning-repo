@@ -1,3 +1,4 @@
+// Reference: https://github.com/koeninger/spark-1/blob/kafkaRdd/external/kafka/src/main/scala/org/apache/spark/streaming/kafka/ReliableKafkaReceiver.scala
 package org.apache.spark.streaming.kafka 
 
 import java.util.Properties 
@@ -103,7 +104,7 @@ class ReliableKafkaReceiver[
     private var topicParitionOffsetMap:mutable.HashMap[TopicAndPartition, Long] = null 
 
     // A concurrent HashMap to store the stream block id and related offset snapshot 
-    // 支持并发访问的 HashMap, 没错, 就是这个 ConcurrentHashMap 转为并发访问而支持的 HashMap 
+    // 支持并发访问的 HashMap, 没错, 就是这个 ConcurrentHashMap 专为并发访问而设计的 HashMap 类型
     // 这个 HashMap 是用来记录将数据流中记录到 block 过程中对应的 block id 的, 以及对应的数据流中的 offset 快照信息进行存储
     // 也可以这么理解, 从 kafka 读取的数据流, 虽然会被加载到内存中进行计算, 但是,也会写入到由 BlockManager 所管理的磁盘上的 block 中
     // 而数据流中的数据究竟目前写入的是哪个 block ? 这个是由 block-id 所标识的, 而数据流中随着数据往 block 也就是由 BlockManager 管理的磁盘对象
@@ -143,7 +144,7 @@ class ReliableKafkaReceiver[
         	// 因为作者在之前已经提到了, 如果使用 ReliableKafkaReceiver 的话会强制关闭消费端自动提交 offset 的这个功能
         	// 所以这里的判断逻辑是对 kafkaParams 这个参数 map 中检查是否有配置 "auto.commit.enable" 这个参数选项,
         	// 如果有配置这个参数选项的话, 读取该配置项的数值, 如果为 true 的话, 打印报警日志信息, 提醒用户这个功能将会在接下来的逻辑中被强行关闭
-        	logWarning(s"$AAUTO_OFFSET_COMMIT should be set to false in ReliableKafkaReceiver, " +
+        	logWarning(s"$AUTO_OFFSET_COMMIT should be set to false in ReliableKafkaReceiver, " +
         		" otherwise we will manually set it to false to turn off auto offset commit in Kafka")
         }
 
@@ -424,4 +425,6 @@ class ReliableKafkaReceiver[
             reportError(message, throwable)
         }
     }
+
+    // 所以, 为什么我没有看到 WAL 的实现方式? 
 }
