@@ -422,7 +422,7 @@ private[streaming] class BlockGenerator (
     // Keep pushing blocks to the BlockManager 
     // 是的, 没错, 在前面注释信息中, 我们不是提到了 2 个线程么, 一个负责周期构建 Block,
     // 另一个负责从队列中取 Block 然后将 Block 推送到 BlockManager 
-    // 而这个 keepPushingBlocks 方法就是线程中底层调用的方法
+    // 而这个 keepPushingBlocks 方法就是第2个线程中底层调用的方法
     private def keepPushingBlocks(){
     	// 打日志标识, 开启 Block 推送进程
         logInfo("Started block pushing thread")
