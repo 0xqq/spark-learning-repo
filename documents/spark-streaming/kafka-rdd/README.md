@@ -18,5 +18,6 @@ inputDStream.foreachRDD((rdd,batchTime) => {
   从中也可以看出社区在对数据在各个组件间传输中, 对 'exactly-once' 语义的实现不断的尝试和努力.  
 
 * [codes](https://github.com/koeninger/spark-1/blob/kafkaRdd/external/kafka/src/main/scala/org/apache/spark/streaming/kafka/)
-* [doc](https://blog.cloudera.com/blog/2017/06/offset-management-for-apache-kafka-with-apache-spark-streaming/)
+* [doc1](https://blog.cloudera.com/blog/2017/06/offset-management-for-apache-kafka-with-apache-spark-streaming/)
+* [doc2](https://github.com/koeninger/kafka-exactly-once/blob/master/blogpost.md) this blog post really worth reading on kafka --- spark-streaming !
 * [jira](https://issues.apache.org/jira/browse/SPARK-4964)
