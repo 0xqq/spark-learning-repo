@@ -209,12 +209,12 @@ private[streaming] class BlockGenerator (
      	// 这么做的目的应该是防止多个线程同时执行 stop/ start 方法对其中状态修改生成脏数据状态信息造成状态机状态切换出现问题 
 
      	// Stop generating blocks and set the state for block pushing thread to start draining the queue 
-     	// 停到构建数据块操作, 然后进行状态切换, 来让数据块推送线程开始推送队列中所有的 Block 到 BlockManager 
+     	// 停掉构建数据块操作, 然后进行状态切换, 来让数据块推送线程开始推送队列中所有的 Block 到 BlockManager 
 
         // 打印日志
      	logInfo("Stopping BlockGenerator")
 
-     	// 以非中断的防止将触发器中执行的操作执行完
+     	// 以非中断的方式将触发器中执行的操作执行完
      	blockIntervalTimer.stop( interruptTimer = false )
 
         // 将状态置位 StoppedAll 
@@ -223,26 +223,279 @@ private[streaming] class BlockGenerator (
      	// 打印日志, 将 BlockGenerator 停止服务的日志打印出来, 这个 stop 方法中进行了 2 此状态切换
      	logInfo("Stopped BlockGenerator")
      }  
+
+     // Push a single data item into the buffer 
+     // addData 方法用于将单独的一个数据项写入到缓冲区中
+     def addData(data:Any):Unit = {
+     	if (state == Active) {
+     		// 在执行 addData 方法之前, 首先需要判断一下当前状态机所处的状态, 只有状态为 Active 状态时, 才能执行下述的操作
+     		// 这个 waitToPush() 方法是 BlockGenerator 所继承的 RateLimiter 基类中所提供的方法,
+     		// 而这个 RateLimiter 则是反压/backpressure/限流 功能最终要的实现,限流的功能所使用的底层类库是 google 库中的 RateLimiter 这个类中提供的功能
+     		// 而其实你也可以理解为 spark 中的 RateLimiter 这个类实际上是封装了 google RateLimiter 这个类, 负责对 google RateLimiter 的接口进行封装调用
+     		// 然后对系统中传入的参数进行适配转换, 传入至 RateLimiter 中来运行
+     		// -----
+     		// 关于 RateLimiter.waitToPush 这个函数而言, 它的功能源码中也有相关的注释我认为很重要, 在这里也一并记录一下
+     		/**
+               waitToPush 
+               * (RateLimiter)Provides waitToPush() method to limit the rate at which receivers consume data. 
+               * (RateLimiter) 中提供的 waitToPush 这个方法的主要作用便是对消费数据进行限流
+               * ---
+               * waitToPush method will block the thread if too many messages have been pushed too quickly, and only return when a new message has been pushed. 
+               * 如果上游消息推送速率太快的话, waitToPush 这个方法将会把接收消息的线程进行阻塞掉, 当新消息到达时仅仅返回作为响应, 而并非接收处理该消息. 
+               * --- 
+               * It assumes that only one message is pushed at a time.
+               * 通过 waitToPush 方法能确保每次只推送 1 条消息. 
+               * --- 
+               * The spark configuration spark.streaming.receiver.maxRate gives the maximum number of messages per seconds that receiver will accept. 
+               * spark 的配置项中的 spark.streaming.receiver.maxRate 这个选项给定了每秒 spark 作为数据接收端最多能够处理的消息条数上限.
+     		*/ 
+     		waitToPush() // 调用该方法, 根据系统当前处理吞吐量来更新接收消息的速率
+     		synchronized {
+     			if ( state == Active ) {
+     				// 串行方式再次判断状态机当前所处的状态是否为 Active, 这里再次判断是为了确保线程在执行外 waitToPush 方法之后, 引 waitToPush 这个方法
+     				// 并没有控制串行之后, 防止其他线程再此期间更新了状态机的状态, 而至于为何 waitToPush 这个方法没有串行执行, 是为了增大线程并发的粒度
+                    // 确认状态无误之后, 将参数传入的 data 数据信息, 追加到缓存空间中
+     				currentBuffer += data 
+     			} else {
+     				// 如果状态非 Active 还要执行 if 分支中追加数据的逻辑的话会抛出 SparkException 的异常信息
+     				// 异常到达这里有可能是, 线程一开始判断当前状态机状态处于 Active 的状态, 但是执行 waitToPush 之后, 状态机的状态
+     				// 发生了切换, 1 中是状态机因为其他 event 执行的操作切换到了 stop 状态, 也有可能是切换到 stop 之后, 再次启动到了 start 刚刚启动状态
+     				// 这两种状态均无法读取数据, 所以到达这里抛出异常信息 
+     				throw new SparkException (
+     					"Cannot add data as BlockGenerator has not been started or has been stopped")
+     			}
+     		}
+     	} else{
+          throw new SparkException (
+          	// 代码到达这里是, 一开始执行 addData 方法的时候状态便不是 Active 状态了, 所以外层 if 内部的逻辑没有执行, 直接执行到这里抛出异常
+          	"Cannot add data as BlockGenerator has been started or has been stopped")
+     	} 
+     }
+
+    /**
+     Push a single data item into the buffer. After buffering the data, the 
+     `BlockGeneratorListener.onAddData` callback will be called. 
+     //---
+     在这个方法中, 我们推送单独的一条数据项到缓冲区中, 在将单条数据项写入缓冲区中之后, 
+     才会触发对 BlockGeneratorListener 中 onAddData 的回调方法的调用. 
+    */
+    def addDataWithCallback(data:Any, metadata:Any):Unit = {
+        if (state == Active) {
+        	waitToPush() // 虽然 RateLimiter 关于这个方法的描述很明白, 但是这里并不太清楚调用这个方法具体有什么作用, 是阻塞掉对上游数据的拉取这个操作,
+        	// 等到处理完 data 参数之后才继续读取数据么？  
+        	synchronized {
+        		if ( state == Active ) {
+        			// 我们将缓冲区中追加此次读取的 1 个数据项
+        			currentBuffer += data 
+        			// 然后, 才触发 listener 中的回调函数, 将此次追加的 1 条数据项和当前的 metadata 元数据信息传入到回调函数中
+        			listener.onAddData(data, metadata)
+        		} else {
+                    // 代码执行到这里是由于, 一开始线程进入 addDataWithCallback 方法的时候, 状态为 Active 
+                    // 但是执行完 waitToPush 方法之后, 状态机的状态发生切换不再是 Active 状态了, 所以继续执行剩下的逻辑
+                    // 会导致状态机状态切换出现问题, 所以会执行到这里抛出异常, 打印提示新
+                    throw new SparkException("Cannot add data as BlockGenerator has not been started or has been stopped")
+        		}
+        	}
+        } else {
+        	// 状态非 Active 又想执行 addDataWithCallback 函数会导致状态机切换出现问题, 所以会执行到这里抛出异常, 打印提示信息
+        	throw new SparkException(
+        		"Cannot add data as BlockGenerator has not been started or has been stopped. ")
+        }
+    }
+
+    /**
+     Push multiple data items into the buffer. After buffering the data, the BlockGeneratorListener.onAddData callback will be called. 
+     Note that all the data items are atomically added to the buffer, and are hence guaranteed to be present in a single block. 
+     如下的这个 `addMultipleDataWithCallback` 方法是用来一次性将多个数据项推送到缓冲区中的. 
+     在方法中逐个遍历数据项,将所有的数据项逐个追加到临时开辟的缓存空间中, 然后统一触发调用一次 listener 的回调方法将开辟的缓存空间数据一次性提交给缓存空间
+     // --- 
+     Note that all the data items are atomically added to the buffer, and are hence guaranteed to be present in a single block.
+     需要注意的是, 所有的数据项的追加操作, 以及回调方法的触发操作均是原子粒度的, 而且 addMultipleDataWithCallback 这个函数中所遍历操作的所有
+     数据项均属于同一个 block 中额数据(其实这里仔细想一想, 这个方法调用中的 dataIterator 中的每个数据项可以将其看作是每个 batch 到达的数据,
+     而在前文注释中也有提到, 多个 batch 到达的数据, 汇聚成 1 个 block, 同时, 控制 1 个 block 中 batch 个数是间接地由 rate.limiter 这个参数来控制的. )
+    */
+    def addMultipleDataWithCallback( dataIterator:Iterator[Any], metadata:Any):Unit = {
+        if ( state == Active ) {
+        	// Unroll iterator into a temp buffer, and wait for pushing in the process 
+        	// 逐个遍历 dataIterator 中的数据项, 然后将其逐个追加到缓冲区中
+
+        	// 首先开辟一块数据缓冲区, 由 tempBuffer 作为引用指向这块空间
+        	val tempBuffer = new ArrayBuffer[Any]
+        	dataIterator.foreach { data => 
+                waitToPush() 
+                // 到这里再次看到 waitToPush 这个方法, 我觉得这个方法是通过限流的方法, 每次仅从上游数据流中读取 1 个数据项
+                // 因为在这里, 我们刚好遍历 1 个数据项, 将数据项给消费了, 而调用 waitToPush() 的频度和消费的频度一致
+                // 所以很有可能是, 我们维护一块缓冲空间, 空间大小一定, 我们没消费处理一条数据, 便在调用这个 waitToPush 函数从上游拉取一条数据
+
+                tempBuffer += data 
+                // 这里我们将数据项追加到缓存空间中 
+        	} // 结束数据项的迭代遍历, 此时数据项已经从多条汇聚到缓存空间中的一个数据块, 即, tempBuffer 
+
+        	synchronized {
+        		if (state == Active) {
+        			// 在这里再次检查当前状态机所处的状态是否为 Active, 
+        			// 如果状态没有问题, 就将累加得到的临时缓冲区的 tempBuffer 一次性追加到 currentBuffer 缓冲空间中 
+        			// 然后将此次累加的 tempBuffer 和包含当前信息的 metadata 传入至 listener 中的 onAddData 回调函数中
+        			currentBuffer += tempBuffer 
+        			listener.onAddData(tempBuffer, metadata)
+        		} else {
+        			// 如果再次检查状态发生变动, 为保证状态机状态切换正常流转, 在这里抛异常打印提示信息
+        			throw new SparkException(
+        				"Cannot add data as BlockGenerator has not been started or has been stopped")
+        		}
+        	}
+        } else {
+        	// 一开始检查状态机状态信息不满足执行方法所需状态的话, 直接抛异常打印提示信息
+        	throw new SparkException (
+        		"Cannot add data as BlockGenerator has not been started or has been stopped")
+        }
+    }
+
+    def isActive():Boolean = state == Active 
+
+    def isStopped():Boolean = state == StoppedAll 
+
+    // Change the buffer to which single records are added to 
+    // 这个 updateCurrentBuffer 方法是将成员变量 currentBuffer 所指向的原有内存空间
+    // 赋值给一个临时的引用对象指向, 然后将该临时引用对象指向的内存空间构建 Block 对象
+    // 然后数据便从缓冲区中转到了 Block 对象中, 最终会被发往 BlockManager 由 BlockManager 来管理这块 Block 中的空间数据
+    // 而 currentBuffer 再将其原有空间让临时引用对象指向保证这块空间不会因为没有引用指向它而被 GC 回收,
+    // currentBuffer 会指向新开辟的一块数据空间, 待到 Block 构建好托管至 BlockManager 之后,
+    // 方法退出, 临时的引用对象被销毁, 原有的数据空间便没有存活的引用来指向它, 这个时候如果发生垃圾回收的话
+    // 这块空间会被 GC 探测到, 进而会被释放与回收
+    private def updateCurrentBuffer(time:Long):Unit = {
+    	try {
+    		var newBlock:Block = null 
+    		synchronized {
+    			if ( currentBuffer.nonEmpty ) {
+    				// 在这里我们使用 newBlockBuffer 和 currentBuffer 指向相同的内存缓冲空间
+    				val newBlockBuffer = currentBuffer 
+    				// 然后转移类成员变量指向一块新开辟的内存缓冲空间
+    				currentBuffer = new ArrayBuffer[Any]
+    				// 然后, 我们将 BlockGenerator 构造函数传入的 receiverId 和 当前时间 - block 生成的时间间隔 这两个参数
+    				// 来构建 StreamBlockId 对象实例
+    				val blockId = StreamBlockId(receiverId, time - blockIntervalMs)
+    				// 再我们构建好 blockId 之后, 我们调用 listener 中的 onGenerateBlock , 将构建 block 的事件传递给 listener 
+    				// 连同要构建的 block 的 blockId 一并通过回调函数进行回传, 如果有必要的话, 在回调函数的逻辑中, 我们会将
+    				// 相关的 metadata 及 blockId 信息同步更新到某个缓存中等等 
+    				listener.onGenerateBlock(blockId)
+
+    				// 在每个执行逻辑中, 回调函数及回调函数下述的逻辑都是串行的, 所以我们执行回调函数完毕之后, 才会继续执行构建 Block 对象的逻辑 
+    				newBlock = new Block(blockId, newBlockBuffer)
+    			}
+    		}
+
+    		if (newBlock != null) {
+    			// 在上面的操作中, 我们创建了 Block 对象, 在下面的环节中, 主要就是要把这个 Block 对象推送到 BlockManager 中, 让 BlockManager 来管理新构建的 Block 对象
+    			// 而推送的过程是 1 个线程负责推送, + 1 个队列进行缓存来实现的(其实和线程池差不多), 每次线程从队列中获取队头的 Block 元素
+    			// 然后将其发送给 BlockManager 
+    			// 在这里, 如果队列已满, 那么将新创建的 Block 加入到队列中这一步操作也会阻塞住, 阻塞的同时状态机会停在当前的状态上, 也能够实现不从上游数据中拉取数据
+    			// 这样避免了数据不断从上游读取而造成的本地滞留数据量太大. 
+    			// --- 
+    			// 总之, 在这里, 只需要了解, Block 在发送之前, 是先进入到 Block 队列中进行排队的, 然后按照 且队列控制的 FIFO 的顺序被逐个处理发送出去的就 ok 了
+    			blocksForPushing.put(newBlock) 
+    			// put is blocking when queue is full 
+    		}
+    	} catch {
+    		case ie: InterruptedException => 
+    		    logInfo("Block updating timer thread was interrupted")
+    		case e: Exception => 
+    		     // 在这里的 reportError 方法底层也会调用 listener 中的 onError 这个回调函数
+    		     // 其实 listener 看到这里, 我大概了解回调函数的作用了
+    		     // 就是在状态机在不同状态间切换的时候, 我们想为其增加一些个性化或者是定制化的处理
+    		     // 比如在某个状态切换点, 我们需要切换期间的上下文信息, 比如就说数据流的 metadata 信息吧
+    		     // 我们需要获取, 然后将这个 metadata 进行分析, 将分析结果写到外存,
+    		     // 直接加到状态机中会让状态机中的逻辑代码变得十分冗余, 而且每次定制/个性化处理的方式不同, 需要频繁修改
+    		     // 状态机的代码, 这么做并不稳妥, 
+    		     // 所以, 在这里设计者, 通过 listener 里面定制了相关的接口, 
+    		     // 以及在状态机中, 特定的状态流转和切换的点上, 通过 listener 暴露一些对外的开口, 
+    		     // 这样用户便可通过暴露的这些开口, 获取状态机中内部的上下文信息, 然后通过实现 listener 中定制的接口方法
+    		     // 来根据自己的需要来完成对暴露接口所获取的上下文信息的处理逻辑
+    		     // 这大概也是不破坏原有逻辑, 可以动态增加方法逻辑的很好的设计方法
+    		     // ---- 
+    		     // 这个地方有一点点类似于 spring 中的面向切面的编程(AOP), 不过 AOP 中的切面是在 class 上增加的处理逻辑
+    		     // 而 listener + event + callback 这种还是直接在程序上增加的处理逻辑 
+    		    reportError("Error in block updating thread", e )
+    	}
+    }
+
+    // Keep pushing blocks to the BlockManager 
+    // 是的, 没错, 在前面注释信息中, 我们不是提到了 2 个线程么, 一个负责周期构建 Block,
+    // 另一个负责从队列中取 Block 然后将 Block 推送到 BlockManager 
+    // 而这个 keepPushingBlocks 方法就是线程中底层调用的方法
+    private def keepPushingBlocks(){
+    	// 打日志标识, 开启 Block 推送进程
+        logInfo("Started block pushing thread")
+        
+        // 这个方法被创建出来供在 keepPushingBlocks 方法范围内来使用, 
+        // 用于快速检测当前状态机所处的状态是否处于 停止构建 Block 的状态
+        def areBlocksBeingGenerated:Boolean = synchronized {
+            state != StoppedGeneratingBlocks 
+        }
+
+        try {
+        	// While blocks are being generated, keep polling for to-be-pushed blocks and push them. 
+        	// 在 block 不断被构建的期间, 持续地从 Block 队列中 FIFO 拉取 Block 并将其发送到 BlockManager 
+        	while (areBlocksBeingGenerated) {
+        		// 检测, 只要状态不是 'StoppedGeneratingBlocks' 就继续维持这个循环进行
+        		Option(blocksForPushing.poll(10, TimeUnit.MILLISECONDS)) match {
+        			// 在这里, 值得注意一下 ArrayBlockingQueue 中的 poll 这个函数
+        			// 这个函数首个参数是时间长度, 第二个参数是时间单位
+        			// 大意是, 在等待的 10 毫秒时间内, 尝试从队列中阻塞式地拉取队头元素, 
+        			// 如果队列非空, 直接拉取队头元素即可, 如果一开始队列为空, 并在所等待的指定阻塞时间内 10 ms 队列还是空的,
+        			// 则不会继续阻塞, 直接返回 null, 而下面的 两个 case 也是分别匹配了
+        			// 返回为 null 和 返回正常队头元素 Block 的不同处理逻辑, 
+        			// --->>> 返回为 null 的时不错任何处理
+        			// --->>> 返回队头元素 Block 的时候调用成员方法 pushBlock, 间接地通过 listener 中的回调函数来完成数据向 BlockManager 的推送
+        			case Some(block) => pushBlock(block)
+        			case None => 
+        		}
+        	}
+
+        	// At this point, state is StoppedGeneratingBlock. So drain the queue of to-be-pushed blocks. 
+        	// 如果程序代码执行到了这里, 就说明当前状态机所处于的状态为 StoppedGeneratingBlocks 这个状态了
+        	// 这个状态说明, 上游已经不再构建 Block 了, 滞留在本地的阻塞队列中的元素便是所有 Block 了
+        	// 我们无需顾虑处理将 Block 加到队列中这里的操作, 只需要将队列中的所有元素逐个推送到 BlockManager 即可
+        	// ---- 啰嗦啰嗦
+        	// 虽然我对 SparkListener/ListenerBus 这里的代码还没有开始仔细看, 但是这里的处理的逻辑, 真的是与StreamingContext 退出之前
+        	// 不再接收新到达 job 而是将队列中滞留的所有 job 逐步 submit 提交的处理逻辑好相似!!!
+        	// ---- 结束啰嗦
+             
+            // 打印日志信息, 标识现在开始遍历队列, 然后将队列中所有的元素进行数据推送
+        	logInfo("Pushing out the last " + blocksForPushing.size() + " blocks")
+        
+            while ( !blocksForPushing.isEmpty ) {
+            	// 这个循环就是从头开始逐个访问队列中的元素
+            	val block = blocksForPushing.take() // 获取队列中的首个元素
+
+            	// 打个 DEBUG 级别的日志, 标明现在就开始推送最后的 block 了
+            	logDebug(s"Pushing block $block")
+
+            	pushBlock(block) // 就是调用下面定义的这个 pushBlock 函数, 底层调用的是 listener 中的 onPushBlock 这个回调函数
+
+            	// 最后打日志标识一下, 现在队列中还有多少个 Block 没有被推送出去 
+            	logInfo("Blocks left to push " + blockForPushing.size())
+            } catch {
+            	// 剩下的这两个就是当上述操作抛出异常的时候, 到这里统一处理记录下
+               case ie:InterruptedException => 
+                   logInfo("Block pushing thread was interrupted ")
+               case e: Exception => 
+                   reportError("Error in block pushing thread", e)
+            }
+        }
+    }
+
+    private def reportError(message:String, t:Throwable) {
+    	logError(message, t)
+    	listener.onError(message, t)
+    }
+
+    // 这个方法会调用定义在 listener 中的 onPushBlock 回调函数
+    private def pushBlock(block:Block) { 
+        listener.onPushBlock(block.id, block.buffer)
+        logInfo("Pushed block " + block.id)
+    }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // ---- 阅读之前写的 ---- 
 
@@ -268,4 +521,5 @@ private def rememberBlockOffsets(blockId:StreamBlockId):Unit = {
 // 后来想了一下, 是因为我对调用 rememberBlockOffsets 函数的 BlockGeneratorListener 中定义的回调函数: onGenerateBlock 
 // 这个回调函数所处理的 Event 到达的时机不理解, 导致我不清楚 rememberBlockOffsets 函数被执行的时间背景是什么样的, 
 // 进而导致了我对其中缓存 hash map 中数据 clear 清空方法的不了解, 所以这里决定阅读批注一下 BlockGenerator.scala 这一份源码
+// 以及, 如果能把这份代码中处理数据的流程使用图示的方法表述出来能够进一步了解整个模块的运行原理. 
 
