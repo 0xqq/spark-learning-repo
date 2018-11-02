@@ -51,8 +51,12 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
   *
   * And set window attributes:
   *
-  * - window duration(range of the window generated every time) = 10 seconds
-  * - window slide(every time the window with the length of the window duration move forward steps) = 2 seconds
+  * - window duration(range of the window generated every time) = 8 seconds
+  * - window slide(every time the window with the length of the window duration move forward steps) = 1 seconds
+  *
+  * And in the following codes, we set the
+  * - window duration = 10 seconds
+  * - window slide = 2 seconds 
   **/
 
 object WindowOperationExample {
