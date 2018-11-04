@@ -1,5 +1,10 @@
 * 说明, 任何文章可通过 [链接](https://github.com/Kylin1027/streaming-readings/blob/master/README.md) + 手动搜索论文名称来查询到下载链接地址
 
+# TODO: 本文中的 Evaluation 其实是我一直理解错误了, 在看了 Flink 中的 [Evaluation](https://github.com/Kylin1027/flink-learning-repo/blob/master/documents/flink-window-introducing.md) 相关博客之后, 才发现这个 Evaluation 实际上指的是
+# 基于窗口中的元素进行计算的方法, 而非窗口执行计算的是偶对计算函数进行时间空间复杂度的估值函数，所以通篇的翻译需要进行重新整理
+# 这里的 Evaluation  = Window Operation = the operator perform upon Window 
+
+
 ##Semantics and Evaluation Techniques for Window Aggregates in Data Streams
 
 ##数据流中基于窗口聚合的语义与估值方法
