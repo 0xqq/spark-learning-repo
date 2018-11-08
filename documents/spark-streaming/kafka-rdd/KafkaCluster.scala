@@ -50,7 +50,6 @@ import org.apache.spark.SparkException
         _config 
     }
 
-
     /**
      在调用 connect 方法的时候, 实际上我们创建了一个 SimpleConsumer 这个对象实例,
      SimpleConsumer 的代码链接地址是
@@ -66,17 +65,16 @@ import org.apache.spark.SparkException
         new SimpleConsumer(host, port, config.socketTimeoutMs, 
         	    config.socketReceiveBufferBytes, config.clientId)
 
-
+    // 此方法首先根据传入的 topic 和 partition 来定位找负责更新相关 topic && partition 指定 offset 的 Leader 节点的 ip port
+    // 然后通过调用 right 来获取该 (ip,port) 所构成的元组, 通过 map 函数来调用其相关方法与该 Leader Broker (ip, port) 创建连接 
     def connectLeader(topic:String, partition:Int):Either[Err, SimpleConsumer] = 
         findLeader(topic, partitoin).right.map(hp => connect(hp._1, hp._2))
-
 
     // Metadata api 
     // scalastyle:off 
     // https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-MetadataAPI
     // scalastyle:on 
    
-    
     // TopicMetadataRequest: https://github.com/apache/kafka/blob/0.8.1/core/src/main/scala/kafka/api/TopicMetadataRequest.scala
     // findLeader 这个函数, 根据传入的 topic 名称, 和这个 topic 的分区的 ID 数值
     // 返回存放这个 topic 且分区 ID 与传入参数匹配的节点的 hostname && port 值
@@ -135,20 +133,20 @@ import org.apache.spark.SparkException
         // 此期间的异常均会被 Left 这里包装的 ArrayBuffer[Throwable]:Err 记录, 作为 left 返回
         // ======================================================================================
 
-
-        // 
+        // 这个方法会根据传入的由 topic 构成的集合来构建消息体, 然后将消息体 TopicMetadataRequest 发送到 Kafka server 端
+	// 接收到的消息体类型为 TopicMetadataResponse 实例, 从这个实例中获取其 topicsMetadata:Seq[TopicMetadata] 将转换为 Map 实例然后进行返回
+	
+	// 接收到的消息体类型为 TopicMetadataResponse 实例, 从这个实例中获取其 topicsMetadata 
         def getPartitionMetadata(topics:Set[String]):Either[Err, Set[TopicMetadata]] = {
         
         	// 首先构造  kafka 服务端能够接受的消息体实例
         	val req = TopicMetadataRequest (
                       TopicMetadataRequest.CurrentVersion, 0, config.clientId, topics.toSeq)
-            
             val errs = new Err 
-
             withBrokers(Random.shuffle(config.seedBrokers), errs) { consumer => 
             	// 将构造好的消息体经由 withBrokers 函数构建好的 consumer:SimpleConsumer 的 send 方法发送至 Kafka 服务器端
                 val resp:TopicMetadataResponse = consumer.send(req)
-
+		
                 // error codes here indicate missing / just created topic, 
                 // repeating on a different broker won't be useful
                 // 在这里存在两种异常点, 一种是 consumer 构建的异常, 这个异常会写入到 errs 中
@@ -160,7 +158,6 @@ import org.apache.spark.SparkException
             // 如果整个过程均为异常, 则会使用 Left 包装异常信息数组进行返回 
             Left(err)
         }
-
 
         // findLeader , 会根据给定的 topic 和 partition 至返回 1 个 Leader Broker 节点, 
         // 而下面这个方法会返回多个 Leader 节点, 以 Map[TopicAndPartition, (String,Int)] 的格式
@@ -190,10 +187,9 @@ import org.apache.spark.SparkException
                         	}
                         } else {
                         	None 
-                        }
-        	    	}
+                          }
+        	       }
         	    }.toMap 
-
         	    if (leaderMap.keys.size == topicAndPartitions.size) {
         	    	// 最终在这里 leaderMap:[TopicAndPartition, (String,Int)]
         	    	// 而 topicAndPartition:Set[TopicAndPartition] 
@@ -216,13 +212,7 @@ import org.apache.spark.SparkException
         	// 上述方法中的 Right/Left 会由 answer 接收, 将 answer 作为返回数值进行返回
         	answer 
         }
-
-
  }
-
-
-
-
 
 // =====================================================
 
