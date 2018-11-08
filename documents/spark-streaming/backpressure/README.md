@@ -1,5 +1,8 @@
 ## Spark Streaming back-pressure 
 
+#### related papers 
+* [Adaptive Stream Processing using Dynamic Batch Sizing](https://www2.eecs.berkeley.edu/Pubs/TechRpts/2014/EECS-2014-133.pdf)
+
 #### related design docs 
 * [Add back-pressure signaling to Spark Streaming](https://docs.google.com/document/d/1ls_g5fFmfbbSTIfQQpUxH56d0f3OksF567zwA00zK9E/edit)
 * [Spark Streaming back-pressure signaling](https://docs.google.com/document/d/1ZhiP_yBHcbjifz8nJEyPJpHqxB1FT6s8-Zk7sAfayQw/edit#)
