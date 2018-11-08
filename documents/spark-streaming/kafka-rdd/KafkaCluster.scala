@@ -290,19 +290,91 @@ import org.apache.spark.SparkException
 	 // 然后, 将 Set[(String, Int)] 记录的 Leader Broker 的基础信息作为参数传入到 withBrokers 函数中
 	 // withBrokers 函数会使用传入的 hostname 和 ip 来构造 SimpleConsumer 并以 SimpleC 实例对象来执行 consumer => 后续的函数逻辑
 	 withBrokers(leaders, errs) { consumer => 
-             val partitionsToGetOffsets:Seq[TopicAndPartition] =
-		 leaderToTp((consumer.host, consumer.port))
-                 // 将 consumer 实例中成功连接的 LeaderBroker 中的 ip & port 获取出来
-		 // 构建成元组, 传入到类型为 Map[(String, Int), Seq[TopicAndPartition]] 中来获取这个 Broker Leader 上的
-		 // 所有 topic & partition Seq[TopicAndPartition] 
-		 
-             // 在这里, 我们将当前 consumer 所指向的 LeaderBroker 上的订阅的所有 topic && partition 映射对逐一通过 map 进行转换一下
-	     val reqMap = partitionsGetOffsets.map { 
-	     }		 
-	 }  // withBrokers 函数声明中 fn 函数的 body 是由 consumer => ... 构成的
+              // 将 consumer 实例中成功连接的 LeaderBroker 中的 ip & port 获取出来
+              // 构建成元组, 传入到类型为 Map[(String, Int), Seq[TopicAndPartition]] 中来获取这个 Broker Leader 上的
+             // 所有 topic & partition Seq[TopicAndPartition] 
+            val partitionsToGetOffsets:Seq[TopicAndPartition] = leaderToTp((consumer.host, consumer.port))
+            
+            // 在这里, 我们将当前 consumer 所指向的 LeaderBroker 上的订阅的所有 topic && partition 映射对逐一通过 map 进行转换一下
+            // 从 Seq[TopicAndPartition] 转换为 Map[TopicAndPartition, PartitionOffsetRequestInfo] 
+            val reqMap = partitionsGetOffsets.map { tp: TopicAndPartition => 
+                 tp -> PartitoinOffsetRequestInfo(before, maxNumOffsets)
+	          }.toMap 
+ 
+            // 然后将转换得到的 Map[TopicAndPartition, PartitionOffsetRequestInfo] 传入到 OffsetRequest 这个类中
+            // OffsetRequest 消息请求体代码: https://github.com/apache/kafka/blob/0.8.1/core/src/main/scala/kafka/api/OffsetRequest.scala
+            // OffsetResponse 消息回复结构代码: https://github.com/apache/kafka/blob/0.8.1/core/src/main/scala/kafka/api/OffsetResponse.scala 
+            // 从 OffsetResponse 代码的构造函数可知, 只有第一个参数 Map[TopicAndPartition, PartitionOffsetRequestInfo] 这个参数需要传入
+            // 其余的参数类型均来自于类中的静态变量数值
+            /**
+               case class OffsetRequest(requestInfo:Map[TopicAndPartition, PartitionOffsetRequestInfo],
+                          versionId:Short = OffsetRequest.CurrentVersion,  
+                          override val correlatedId:Int = 0,
+                          clientId:String = OffsetRequest.DefaultClientId,
+                          replicaId:Int = Request.OrdinaryConsumerId)
+            */
+            // 经过上述一番折腾之后, 在这里我们有了向 kafka server 发送 Offset 请求的消息体: OffsetRequest 
+            val req = OffsetRequest(reqMap)	
+
+            // 然后借助于先前创建并初始化好的 consumer 调用 getOffsetsBefore 这个函, 将 OffsetRequest 传入到方法中 
+            // 而所返回的消息体是 OffsetResponse 类型的, 
+            // OffsetResponse:  https://github.com/apache/kafka/blob/0.8/core/src/main/scala/kafka/api/OffsetResponse.scala
+            val resp = consumer.getOffsetsBefore(req)
+            // 其中 OffsetResponse 中的 partitionErrorAndOffsets 成员变量的类型为  Map[TopicAndPartition, PartitionOffsetsResponse] 这个类型
+            val respMap = resp.partitionErrorAndOffsets
+
+            // respMap 中是我们从 Broker Leader 端获取到的最新 Offset Metadata 相关的信息
+            // 有了这些数据之后, 我们开始逐一遍历 partitionsToGetOffsets:Seq[TopicAndPartition] 中的关于 kafka 的 topic && partition 
+            partitionsToGetOffsets.foreach { tp:TopicAndPartition => 
+                // respMap:Map[TopicAndPartition, PartitionOffsetResponse] 会将当前遍历到的 TopicAndPartition 作为 key 找到
+                // 其 Broker Leader 节点上所存放关于该 TopicAndPartition 的 PartitionOffset 的数值信息
+                respMap.get(tp).foreach { por:PartitionOffsetsResponse => 
+                    if ( por.error == ErrorMapping.NoError) {
+                    // 如果当前的 PartitionOffsetResponse 中没有记录异常信息的话, 则进一步访问该消息体中的数据字段
+                        if(por.offsets.nonEmpty) {
+                          // 这里的 tp:TopicAndPartition, 而, result 类型为 Map[TopicAndPartition, Seq[LeaderOffset]]
+                          // 我们将当前的 tp 作为 Map 的 Key, 而对应的 Value 则通过当前的 por:PartitionOffsetResponse
+                          // 中的 offset 进行 遍历, 没遍历一个 offset 就构建一个 LeaderOffset 实例, 
+                          // 然后不断将 LeaderOffset 实例追加到 Map[TopicAndPartition, Seq[LeaderOffset] 的 Seq[LeaderOffset] 中, 最终全部由相同的
+                          // tp:TopicAndPartition 来作为 key 指向
+                           result += tp -> por.offsets.map { off =>
+                                LeaderOffset(consumer.host, consumer.port, off)
+                        } 
+                    } else {
+                      // 当前的这个 else 分支所对应的是 por.offsets.nonEmpty 分支这里不满足条件  
+                      // 则会跑到这里来, 使用 Err:ArrayBuffer[Throwable] 将相关的异常追加到动态数组中
+                          errs.append(new SparkException(
+                            s"Empty offsets for ${tp}, is ${before} before log beginning?"))
+                  }
+                } else {
+                  // 如果 if 这里走到的是 por.error == ErrorMapping.NoError 这个分支判断不满足条件
+                  // 会跑到这里来, 同样使用 Err 实例来接收消息
+                   errs.append(ErrorMapping.exceptionFor(por.error))
+                }                
+              }
+            }
+            if (result.key.size == topicAndPartitions.size) {
+                // 在这个地方 result:Map[TopicAndPartition, Seq[LeaderOffset]]
+                // result 中记录的是 1 个 topic && partition 在不同的 Leader Broker 节点上的 Offset 数值
+                // topicAndPartitions:Seq[TopicAndPartition] 
+                // topicAndPartitions 上所记录的是所有需要追溯 offset 的 topic && partition 的 TopicAndPartition 实例对象
+                // 如果二者集合大小相同,则表明所有需要追溯 offset 的 topic  && partition 的 offset 数值均已经追溯到了
+                // 将其使用返回类型 Either[Err, Map[TopicAndPartition, Seq[LeaderOffset]]] 的 Right 包装结果并返回 
+                return Right(result)
+            }
+	    }  
+      // withBrokers 函数声明中 fn 函数的 body 是由 consumer => ... 构成的
 	    // 并且函数正确执行的过程必须是 withBrokers 中构建 consumer 实例被正确无异常创建的时候才会执行 fn(consumer) 的函数调用
 	    // 并且 fn() 函数为匿名函数, 参数和返回参数类型均已经给定了, 而实际的执行方法在这里由 consumer => 来指向 
-     }
+      // 到这里 withBrokers 执行结束, 如果 topic && partition 全部获取到, 直接返回即可
+      // 如果, 没有获取到, 会执行到这里, 整理 Throwable 类型的各种异常追加到 Err 中, 使用 Left 包装 Err 将其返回
+      // 这个地方获取 result.keySet 的 keySet 对应就是 Seq[TopicAndPartition] 的类型, 和我们传入的 topicAndPartiton 类型相同, 
+      // 在这个地方执行一个 diff 操作, 能通过 diff 操作查找到 result.keySet 中有多少不再预期希望查询到 offset 的 TopicAndPartition 集合中
+      // 将这些没有获取的 TopicAndPartition 写入到 Err 中进行返回
+      val missing = topicAndPartitions.diff(result.keySet)
+      errs.append(new SparkException(s"Couldn't find leader offsets for ${missing} "))
+      Left(errs)
+  }
  }			       
 // =====================================================
 
