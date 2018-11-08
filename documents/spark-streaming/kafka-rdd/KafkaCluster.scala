@@ -158,7 +158,24 @@ import org.apache.spark.SparkException
             // 如果整个过程均为异常, 则会使用 Left 包装异常信息数组进行返回 
             Left(err)
         }
-
+  
+	 def getPartitions(topics:Seq[String]):Either[Err, Set[TopicAndPartition]] = {
+             // getPartitionMetadata 函数返回的 right 是 Seq[TopicMetadata] 类型		
+	     getPartitionMetadata(topics).right.map { r => 
+		 // 在这里注意遍历 Set[TopicAndPartition] 中元素的实例对象
+	         r.flatMap { tm:TopicMetadata => 
+			 // 在这里访问 TopicMetadata 对象实例
+			 // 然后从 TopicMetadata 实例中获取 partitionsMetadata:Array[PartitionMetadata] 成员变量逐一遍历并进行访问
+			 // 然后, 将上一层的 TopicMetadata 中的 topic 获取出来
+			 // 和本层的 PartitionMetadata 中的 partitionId 获取出传入到 TopicAndPartition 构造方法中
+			 tm.partitionsMetadata.map { pm:PartitionMetadata =>
+		             // 最后在这里将构造的实例对象进行返回, 最终会通过 map 方法将实例对象构成 Set 结果		 
+			     TopicAndPartition(tm.topic, pm.partitionId)
+			 }
+		   }
+	     } 
+	 }
+	 
         // findLeader , 会根据给定的 topic 和 partition 至返回 1 个 Leader Broker 节点, 
         // 而下面这个方法会返回多个 Leader 节点, 以 Map[TopicAndPartition, (String,Int)] 的格式
         // key 是 topic partition ; value 是这个 topic partition 所属于的 Leader Broker 节点的 ip 和 port 数值
@@ -214,6 +231,59 @@ import org.apache.spark.SparkException
         }
  }
 
+ def getLatestLeaderOffsets(
+	 topicAndPartitions:Set[TopicAndPartition]):Either[Err, Map[TopicAndPartition, LeaderOffset]] = 
+     getLeaderOfffsets(topicAndPartitions, OffsetRequest.LatestTime)
+
+ def getLeaderOffsets(
+     topicAndPartition:Set[TopicAndPartition],
+     before:Long
+ ):Either[Err, Map[TopicAndPartition, LeaderOffset]] = {
+     // 在这里将包含 topic & partition 的信息作为 key, 对应记录该 topic & partition 上的 offset 数值对象构成的 HashMap 进行返回
+     getLeaderOffsets(topicAndPartitions, before, 1).right.map { r=>
+         // 在这里调用同名不同参的函数 getLeaderOffsets(topicAndPartitions:Set[TopicAndPartition], before:Long, maxNumOffsets:Int)
+	 // 因为 kafka 自身 ISR 特点和 replcia 数据的备份, 所以通过返回的结构 Map[TopicAndPartition, Seq[LeaderOffset]]
+	 // 能够看出的是每个 topic && partition 都有一个 LeaderOffset 实例构成的 Seq 结构来对应
+	 // 而这个 getLeaderOffsets 函数则是将 TopicAndPartition -> Set[LeaderOffset] 的关系转换成 TopicAndPartition -> LeaderOffset 
+	 r.map { kv => 
+		 // MapValues isn't serializable 
+		 kv._1 -> kv._2.head // 在这里我们逐一遍历 kv = (TopicAndPartition, Seq[LeaderOffset])
+		 // 将 Seq[LeaderOffset] 的首个元素作为 TopicAndPartition 的 value, 即 (TopicAndPartition, LeaderOffset) 
+	 }    
+     }
+ }
+
+ // 在这个方法中会将 Map[K,V] 抓换为 Map[V,Seq[K]] 的格式	
+ // m: Map[TopicAndPartition, (String, Int)]			       
+ private def flip[K,V](m:Map[K,V]):Map[V, Seq[K]] = 
+    // 首先先将 Map[K,V] 的格式按照 map 的 value 进行分组划分
+    // 然后逐一遍历其中的元素数值, Map[TopicAndPartition, (String,Int)] 进行 groupBy((TopicAndPartiton, (String,Int) 中的 (String, Int))
+    // 来进行 groupBy 这样就会将所有的 Broker Leader 的 ip 和 port 相同的 TopicAndPartition 划分到一个组中
+    m.groupBy(_._2).map { kv => 
+      // 这个地方的 kv 对应的是 V -> Map([K,V]), 不过在这里 V 指向的 Map[K,V] 的 Map 中的所有 V 数值都是相同的
+      // 然后继续在这里将 Map[K,V] 这个对象通过调用 Map[K,V].keys Set[K], 再通过 .toSeq 方法将 Set[K] 转换为 Seq[K]
+      kv._1 -> kv._2.keys.toSeq 	    
+      // 在方法的最后所返回的是, Map[V, Seq[K]], 其中 Map 中的每一项 V -> Seq[K] 所表示的含义便是
+      // 某个 Broker(ip, port) 是作为 Seq[K] 中的所有 Topic && Partition 对应的 Leader 节点的 地址信息	    
+    }
+			
+ // 这个函数是将传入的记录着每个 topic 细化到 partitionId 的 Set[TopicAndPartition] 
+ // 和 before:Long 
+ // 和 maxNumOffsets:Int 这个			       
+ def getLeaderOffsets (
+	 topicAndPartitions:Set[TopicAndPartition],
+	 before:Long,
+	 maxNumOffsets:Int):Either[Err, Map[TopicAndPartition, Seq[LeaderOffset]]] = {
+     // 在这个地方调用 findLeaders 函数将传入的 Set[TopicAndPartition] 
+     // 转换为 Map[TopicAndPartition, (String, Int)] 的类型	 
+     findLeaders(topicAndPartitions).right.flatMap { tpToLeader => 
+         // 然后将 Map[TopicAndPartition, (String,Int)] 进行 flatMap 逐一遍历其中的元素 tpToLeader 
+	 // tpToLeader:(TopicAndPartition, (String, Int))  
+	 //     
+	 val leaderToTP:Map[(String, Int), Seq[TopicAndPartition]] = flip(tpToLeader)    
+     
+     }
+ }			       
 // =====================================================
 
 // Try a call against potentially multiple brokers, accumulating errors
