@@ -279,9 +279,29 @@ import org.apache.spark.SparkException
      findLeaders(topicAndPartitions).right.flatMap { tpToLeader => 
          // 然后将 Map[TopicAndPartition, (String,Int)] 进行 flatMap 逐一遍历其中的元素 tpToLeader 
 	 // tpToLeader:(TopicAndPartition, (String, Int))  
-	 //     
+	 // 在对 flip 方法调用之后, 所得到的 leaderToTP 是 1 个 leader broker 上有多个存放在该 leader broker 
+	 // 上的 所有 TopicAndPartition 实体对象    
 	 val leaderToTP:Map[(String, Int), Seq[TopicAndPartition]] = flip(tpToLeader)    
-     
+         val leaders = leaderToTP.keys // leaders 是将所有记录了 TopicAndPartition 集合的 LeaderBroker 节点的信息 (String, Int)
+	 // 在这里创建 1 个 TopicAndPartiton 对应的所有 Leader Broker 的基础信息(ip, port) 和该 Leader Broker 上所存放的
+	 // TopicAndPartition 上消费的进度数值 offset 
+	 var result = Map[TopicAndPartition, Seq[LeaderOffset]] () 
+	 val errs = new Err 
+	 // 然后, 将 Set[(String, Int)] 记录的 Leader Broker 的基础信息作为参数传入到 withBrokers 函数中
+	 // withBrokers 函数会使用传入的 hostname 和 ip 来构造 SimpleConsumer 并以 SimpleC 实例对象来执行 consumer => 后续的函数逻辑
+	 withBrokers(leaders, errs) { consumer => 
+             val partitionsToGetOffsets:Seq[TopicAndPartition] =
+		 leaderToTp((consumer.host, consumer.port))
+                 // 将 consumer 实例中成功连接的 LeaderBroker 中的 ip & port 获取出来
+		 // 构建成元组, 传入到类型为 Map[(String, Int), Seq[TopicAndPartition]] 中来获取这个 Broker Leader 上的
+		 // 所有 topic & partition Seq[TopicAndPartition] 
+		 
+             // 在这里, 我们将当前 consumer 所指向的 LeaderBroker 上的订阅的所有 topic && partition 映射对逐一通过 map 进行转换一下
+	     val reqMap = partitionsGetOffsets.map { 
+	     }		 
+	 }  // withBrokers 函数声明中 fn 函数的 body 是由 consumer => ... 构成的
+	    // 并且函数正确执行的过程必须是 withBrokers 中构建 consumer 实例被正确无异常创建的时候才会执行 fn(consumer) 的函数调用
+	    // 并且 fn() 函数为匿名函数, 参数和返回参数类型均已经给定了, 而实际的执行方法在这里由 consumer => 来指向 
      }
  }			       
 // =====================================================
@@ -395,13 +415,3 @@ object SimpleConsumerConfig {
 		}
 	}
 }
-
-
-
-
-
-
-
-
-
-
