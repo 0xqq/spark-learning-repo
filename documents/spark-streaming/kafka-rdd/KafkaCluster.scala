@@ -375,7 +375,188 @@ import org.apache.spark.SparkException
       errs.append(new SparkException(s"Couldn't find leader offsets for ${missing} "))
       Left(errs)
   }
- }			       
+ }			 
+
+// Consumer offset api
+// scalastyle:off
+// https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-OffsetCommit/FetchAPI
+// scalastyle:on
+
+ // Requires Kafka >= 0.8.1.1 
+ def getConsumerOffsets(
+  groupId:String,
+  topicAndPartitions:Set[TopicAndPartition]):Either[Err, Map[TopicAndPartition, Long]] = {
+      // 调用下面的 getConsumerOffsetMetadata 这个方法
+      // 然后调用 Either 类型的 right 分支 即, Map[TopicAndPartiton, OffsetMetadataAndError] 这个类型作为返回值
+      // 然后通过 map 的方式来便利其中的参数
+      getConsumerOffsetMetadata(groupId, topicAndPartitions).right.map { r => 
+          r.map { kv => // 在这里, kv 对应的是 (TopicAndPartition, OffsetMetadataAndError) 的二元组
+              // 相对应的 key 仍旧是 TopicAndPartition, 而 value 则是 OffsetMetadataAndError 中的 offset:Long 这个成员变量数值
+              // reference: https://github.com/apache/kafka/blob/0.8.1/core/src/main/scala/kafka/common/OffsetMetadataAndError.scala
+              /**
+                case class OffsetMetadataAndError(offset:Long, 
+                           metadata:String = OffsetMtadataAndError.NoMetadata,
+                          error:Short = ErrorMapping.NoError)
+              */ 
+              kv._1 -> kv._2.offset // 这个地方构造的 TopicAndPartition -> Long 与返回结果中的 Map[TopicAndPartition, Long] 相呼应
+          }
+      }
+ }
+
+ // Requires Kafka >= 0.8.1.1 
+ // 这个方法用于将本地消费完成更新的 offset 同步更新到 Kafka Server 端上
+ // 其中 groupId 是本地消费数据的时候的 group.id 
+ // offsets 中存放的是当前消费进程所更新的 offset 的最新的数值
+ def setConsumerOffsets(
+     groupId:String, 
+     offsets:Map[TopicAndPartition, Long]
+  ):Either[Err, Map[TopicAndPartition, Short]] = {
+
+    setConsumerOffsetsMetadata(groupId, offsets.map { kv => 
+      kv._1 -> OffsetMetadataAndError(kv._2)
+    })
+ }
+
+ // Requires Kafka >= 0.8.1.1 
+ def setConsumerOffsetMetadata(
+     groupId:String, 
+     metadata:Map[TopicAndPartition, OffsetMetadataAndError]
+  ):Either[Err, Map[TopicAndPartition, Short]] = {
+    
+    // 构造 result 对象用来存放数据元素
+    var result = Map[TopicAndPartition, Short]() 
+     
+    // 在这里通过传入到方法中的 groupId 和 metadata 来构造 consumer 发送请求的 body  
+    val req = OffsetCommitRequest(groupId, metadata)
+    val errs = new Err // 在这里构造 Err:ArrayBuffer[Throwable] 用于记录在下列逻辑执行过程中遇到的异常信息
+
+    // 从传入的参数中获取到所有的 topic && partiton 对象实例 TopicAndPartition 
+    val topicAndPartitions = metadata.keySet 
+
+    withBrokers(Random.shuffle(config.seedBrokers), errs) { consumer => 
+        // 在这里通过调用 consumer:SimpleConsumer 类中的 commitOffsets 方法将最新的 offset 提交到服务器端
+        // consumer.commitOffsets 所返回的消息类型为: OffsetCommitResponse
+        // OffsetCommitResponse: https://github.com/apache/kafka/blob/0.8.1/core/src/main/scala/kafka/api/OffsetCommitResponse.scala
+        val resp = consumer.commitOffsets(req)
+        // 如下变量 respMap 的类型为 Map[TopicAndPartition, Short] 其中 key 为记录了 topic && partition 信息的 TopicAndPartition 的实例
+        // value 是在将该 TopicAndPartition 所对应的本地消费最新进度的 Offset 经由 consumer.commitOffsets(xxx) 函数调用提交到 Kafka Server 端之后
+        // 每个 topic && partition && offset 数据刷到 Server 上之后的回复状态码信息, 通过 Server/Client 双方约定好的状态码约定规范, 
+        // 来传递 topic && partition && offset 数值信息是否有刷到 Server 上的状态信息 
+        val respMap = resp.requestInfo 
+        // 在这里再次用全量提交的 topic&&partition:TopicAndPartiton - 执行查询后成功记录到 result 中的 TopicAndPartiton 
+        // 来看是否所有的 topic && partition 也就是 TopicAndPartition 的本地 offset 全部更新到 Server 端了
+        // 并将本次没有提交到 Server 端的 topic && partition:TopicAndPartition 记录到 needed 中
+        // 遍历 needed 中的具体信息, 判断返回结果, 如果返回结果正确的话将其追加到 result 中
+        // 在这种记录方式下, 首次运行期间 result 中是空的, 所以首次遍历的时候, 所遍历的是 topicAndPartiton 中的全量 topic && partition 
+        val needed = topicAndPartition.diff(result.keySet)
+        needed.foreach { tp:TopicAndPartition => 
+            respMap.get(tp).foreach { err:Short => 
+                if ( err == ErrorMapping.NoError) {
+                  // 逐一遍历 HashMap 中每个 TopicAndPartition 所对应的 Short 字段对应的 commitOffset 的返回状态码这个变量
+                  // 将它与 ErrorMapping.NoError 这个数值进行比较, 如果相等, 则说明此 Topic && Partition && Offset 已经成功地被提交到了服务器端
+                  // 直接将对应的 Topic&&Partition && 状态码:Short 移到 result 中即可
+                  result += tp -> err 
+                } else {
+                  // 这个分支是上述 err == ErrorMapping.NoError 条件不满足的分支
+                  // 如果执行到这里, 则说明对应的 Topic && Parittion 的 Offset 在提交到 Server 上的时失败
+                  // 在这里我们将失败的信息记录追加到 Err:ArrayBuffer[Throwable] 中
+                  errs.append(ErrorMapping.exceptionFor(err))
+                }
+            }
+          } // needed.foreach 
+          if (result.keys.size == topicAndPartitions.size) {
+              return Right(result)
+          }        
+       }  
+        // withBrokers, 这个方法逐一遍历 config 返回的 _config 中的 seedBrokers 中 ip:port,ip:port 格式存放的 Broker 节点的 ip  && port 
+       //  逐一遍历并构建 consumer, 如果 consumer 构建成功, 便会执行 consumer => xxx 这里的函数体, 如果构建不成功异常信息会被追加到 Err:ArrayBuffer[Throwable] 这个可变数组中 
+      // 如果不相等, 在多个 Topic && Partition 中, 存在一到多个 Topic && Partition 对应的  Offset 没有成功地 Commit 到 Kafka Server 端
+
+      // 如果执行到这里说明上述 Topic && Partition 对应的 offset 提交至 Kafka Server 上的时候没有成功提交
+      // 在这里我们求出 全集 - 成功提交的 keySet = missing 差集, 然后将差集中的 Topic && Partition 信息追加到 Err 中
+       val missing = topicAndPartitions.diff(result.keySet)
+       errs.append( new SparkException(s"Couldn't set offsets for ${missing}"))
+       // 最后将其使用 Left 包装后进行返回
+       Left(errs)
+ }
+ // Requires Kafka >= 0.8.1.1 
+ def getConsumerOffsetMetadata(
+      groupId:String,
+      topicAndPartitions:Set[TopicAndPartition]):Either[Err, Map[TopicAndPartition, OffsetMetadataAndError]] = {
+      
+      // result 是用来存放最后计算结果的对象
+      var result = Map[TopicAndPartition, OffsetMetadataAndError]()
+
+      // 通过参数中传入的 groupId:String 和 topicAndPartitions:TopicAndPartition 来构造 OffsetFetchRequest 对象实例
+      val req = OffsetFetchRequest(groupId, topicAndPartitions.toSeq)
+
+      // 构造用来传入 Throwable 的 Err:ArrayBuffer[Throwable]
+      val errs = new Err 
+
+      // 然后, 从当前类中维护的, 作者自定义开发的 SimpleConsumerConfig 类型的 config 方法中来获取 seedBrokers 
+      // 这个变量中将 broker 的信息, 以 ip:port 的格式使用 , 进行分割存放
+      withBrokers(Random.shuffle(config.seedBrokers), errs) { consumer =>
+         // 通过将前文构建的 OffsetFetchRequest 传入到 consumer 的 fetchOffsets 函数中进行发送
+         // 然后接受到回复消息, 
+         // consumer:SimpleConsumeer 中的 fetchOffsets 函数调用返回值为: OffsetFetchResponse
+         // OffsetFetchResponse: https://github.com/apache/kafka/blob/0.8.1/core/src/main/scala/kafka/api/OffsetFetchResponse.scala
+         val resp = consumer.fetchOffsets(req)
+         // 而 resp:OffsetFetchResponse 中的 requestInfo 成员变量的类型为 Map[TopicAndPartiton, OffsetMetadataAndError]
+         // 其中 OffsetFetchResponse case class 定义如下
+         /**
+            case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadataAndError],
+                       override val correlationId:Int = 0)
+         */ 
+         val respMap = resp.requestInfo
+
+         // 在这里首先将从方法中传入的需要获取 offset metadata 信息的 topic && partiton 信息和结果(首次运行是个空集)
+         // 进行 diff 对比，将目前尚且不清楚 topic && partition 的 offset metadata 的所有 topic && partiton 获取出来
+         // 存放到 needed 变量中
+         val needed = topicAndPartitions.diff(result.keySet)
+         needed.foreach {  tp:TopicAndPartition => 
+          // 逐一遍历 TopicAndMetadata 中的实例, 将其 tp:TopicAndMetadata 和当前 consumer 访问 Kafka Server API 所获取的
+          // respMap:Map[TopicAndPartition, OffsetMetadataAndError] 使用 tp 来获取 OffsetMetadataAndError 实例对象
+          // 如果获取的
+             respMap.get(tp).foreach { ome: OffsetMetadataAndError => 
+                 if (ome.error == ErrorMapping.NoError) {
+                     // 在这里判断通过 TopicAndPartiton 作为 Key 获取到的 Value OffsetMetadataAndError 是否是不包含异常的
+                     // 如果不包含异常则说明该对象实例中存放着当前这个 TopicAndPartition 对应的 topic && partiton 在 Leader Broker 上的 Offset 数值
+                     // 将当前的 tp:TopicAndPartition 作为 key , ome:OffsetMetadataAndError 作为 value 追加到 
+                     // result:Map[TopicAndPartition, OffsetMetadataAndError]
+
+                      result += tp -> ome
+                 } else {
+                      // 如果获取过程中存在异常的话, 会跳转到这个分支下, 将异常信息封装成 Throwable 之后传入到 Err:Array[Throwable] 中
+                      errs.append(ErrorMapping.exeptionFor(ome.error))
+                 }
+             }
+         }
+         // result 的 key 也就是本次获取到的 TopicAndPartition 中的 topic  && partition 在 Leader Broker 上记录的 Offset 信息
+         // 和传入到方法中所需要的 topic && partition 数目相同, 说明当前的结果是全量的, 使用 Right 封装返回即可
+         if (result.keys.size == topicAndPartitions.size) {
+             return Right(result)    
+         } 
+      }
+      // 否则的话, 会到达这里, 将 result 中缺失没有匹配获取到的 topic && key 通过 diff 方法获取出来
+      // 并追加到 Err:ArrayBuffer[Throwable] 中作为异常信息进行返回
+     val missing = topicAndPartitions.diff(result.keySet)
+     errs.append(new SparkException(s"Couldn't find consumer offsets for ${missing}"))
+     Left(errs)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // =====================================================
 
 // Try a call against potentially multiple brokers, accumulating errors
@@ -432,6 +613,7 @@ object KafkaCluster {
    Simple consumers connect directly to brokers, but need many of the same configs.
    This subclass won't warn about missing ZK params, or presence of broker params. 
 */
+
 /**
   高阶 kafka consumer 连接 ZK 配置项实例. SimpleConsumerConfig 类定义及这个类中提供的方法功能均复用了 ConsumerConfig 这个类.
   SimpleConsumer 是作者自己定义的类类型, 它会直接和 broker 二者建立通信关系, 
