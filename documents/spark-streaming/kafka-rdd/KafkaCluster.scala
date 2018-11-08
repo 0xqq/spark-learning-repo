@@ -544,19 +544,6 @@ import org.apache.spark.SparkException
      Left(errs)
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 // =====================================================
 
 // Try a call against potentially multiple brokers, accumulating errors
