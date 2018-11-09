@@ -655,4 +655,4 @@ object SimpleConsumerConfig {
             }
 		}
 	}
-}
+}   

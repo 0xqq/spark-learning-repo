@@ -718,10 +718,11 @@ Q3: SELECT seg-id, count(*)
 ```
 小小梳理一下： 
 1. window-id 用来作为唯一标识 window-extent 的主键, 其经由 windows 函数作用于 tuple 中属性字段数值得到, 不同类型的窗口其 windows 函数计算逻辑不同
-2. window-extent: 是由一到多个构建数据流 Stream 的基本组成元素 tuple 所构成, 使用 window-id 来唯一标识, tuple 经由 extent 函数计算得到相同的 window-id 
-                  会被划归到该 window-id 所唯一标识的 window-extent 中
+
+2. window-extent: 是由一到多个构建数据流 Stream 的基本组成元素 tuple 所构成, 使用 window-id 来唯一标识, tuple 经由 extent 函数计算得到相同的 window-id 的元组会被划归到该 window-id 所唯一标识的 window-extent 中
+
 3. extent:  计算函数, extent(tuple): window-id, 传入 tuple 计算出该 tuple 的 window-id 数值, 
-4. windows: 计算函数, windows( tuple ):window-id, 传入 tuple 得到该 tuple 所属于的 window-extent 的唯一标识符 window-id                 
+4. windows: 计算函数, windows(tuple):window-id, 传入 tuple 得到该 tuple 所属于的 window-extent 的唯一标识符 window-id                 
 ```
 * More precisely, given a window specification S and the set of tuples T that compose a stream, ```windows(T,S)``` is the set of window-ids that identify window extents to which tuples in T may belongs. 
 * 更确切地说, 在已知窗口定义和构建数据的一组元组 T, ```windows(T,S)``` 表示的是数据流元组集合 T 中的每个元组元素应该属于哪个窗口范围(window extents,每个 window extents 使用唯一 window id 来标识) 的多个 window-id 构成的集合.
@@ -744,42 +745,36 @@ Q3: SELECT seg-id, count(*)
 
 <b>注意, 在这个地方开始进行不同窗口进行分类, 呼应本小节开头的 for each type of window we just discussed, 以及这里所说的在前文提到的不同窗口类型, 其实是对应Q1 - Q5 不同类型的 SQL 查询语句</b>
 
-* 窗口类型的逐一讨论分别是这样几个类型：
-
+* 窗口类型的逐一讨论分别是这样几个类型：(通常来讲, 查询语句决定了 window, extent 等函数的特性, 进而决定了窗口的类型)
 ```
-1. For window queries in which RANGE and SLIDE are specified on the WATTR attribute. tumbling window 类型
+1. For window queries in which RANGE and SLIDE are specified on the WATTR attribute. tumbling window 
 2. landmark windows 
 3. Slide-by-tupe window queries 
 4. Partition tuple-based window queries 
 ```
 
-
-
 * For window queries in which RANGE and SLIDE are specified on the WATTR attribute, such as Q1 or Q2, the window and extent functions are as bellow. 
-* 对于窗口查询语句中的 RANGE(窗口范围) 和 SLIDE(窗口滑动步长) 的属性计量单位都和 WATTR(窗口属性) 属性计量单位相同, 就像是 Q1, Q2 窗口查询语句一样, 在这种类型的窗口查询
+* 对于窗口查询语句中的 RANGE(窗口范围) 和 SLIDE(窗口滑动步长) 的属性计量单位都和 WATTR(窗口属性) 属性计量单位相同, 如 Q1, Q2 窗口查询语句, 基于该查询语句的 ```window``` 和 ```extent``` 的函数方法描述如下.
 
 * Here, we use the non-negative integers for window-ids, which depend on neither T nor S. 
-* 在这(窗口语义定义理论体系中), 我们将作为元组 T 和 窗口定义说明 S 二者之间构成映射关系的中间集合 window-ids 该集合中的元素使用非负整型来描述, 可以让 window-ids 集合中的元素不属于 T 和 S 双方任何一方中的元素属性字段(目的是为了防止 window-id 属于 T,S 任何一方的属性字段). 
+* 在这(窗口语义定义理论体系中), 我们将作为元组 T 和 窗口定义说明 S 二者之间构成映射关系的中间集合 window-ids 该集合中的元素使用非负整型来描述, 可以让 window-ids 集合中的元素不属于 T 和 S 双方任何一方中的元素属性(这样做的目的是让 window-ids 保持中立关系, 让其不属于 T,S 任何一方的属性字段). 
 
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming-papers/png/type_1.png)
-
+![image](https://github.com/Kylin1027/spark-learning-repo/tree/master/documents/spark-streaming/papers/png/type_1.png)
 
 * The extent function is defined using only the WATTR values of tuples, independent of physical arrival order. 
 * 在 extent 函数中, 仅使用到了元组中 WATTR 所描述的属性数值, 它(该属性数值) 独立于物理层级中元组到达的顺序(即, 物理层级的元组到达顺序不会对 extent 函数所构建的窗口范围 window extent 造成影响.)
 
-
 * In the extent function, the value min-WATTR(T) represents the minimum value that WATTR takes over all tuples in T. 
-* 在上面给出的 extent 的函数定义中, min-WATTR(T) 是用来表示在接收到的元组中 WATTR 描述的元组属性字段中最小的数值.  
+* 在上面给出的 extent 的函数定义中, min-WATTR(T) 是用来表示在所有到达数据流的元组中 WATTR 描述的元组属性字段中最小的数值.  
 
 * This exact value may be difficult to measure, but in practice any approximation that is less than min-WATTR(T) is acceptable, and does not affect the window extent definition. 
-* 确切的数值很难计算, 所以在实际生产环境中对于 min-WATTR(T) 数值任何合理的估算法都是可以的, 且并不会对最终构建生成的 window-extent/窗口范围 造成影响. 
+* 确切的数值很难计算, 所以在实际生产环境中对于 min-WATTR(T) 数值进行合理的估算做法都是可取的, 且不会对最终构建生成的 window-extent/窗口范围 的划分造成影响. 
 
 * Assuming WATTR values are non-negative numbers, one can always think of min-WATTR(T) as 0. 
 * 设定 WATTR 标识的属性字段的数值均为非负整型, 将 min-WATTR(T) 数值估算设定为 0 是完全没问题的. 
 
 * The 'max' in the extent function deals with the boundary cases where the window 'straddles' the min-WATTR(T) by permitting "partial" window extents. 
-* 在 extent 函数定义中关于 '最大值' 的设定是为了处理窗口元组中 允许构建不完整的窗口范后会出现一种一个窗口占了自身和下一个窗口的 min-WATTR(T) 的属性字段. (说明: 这里的描述等同于开闭区间,例如, window1 所包含的属性数值本应是 [1,99], window2 [100, 199)但是如果不加一个 max 取最大值操作的话, 会出现一种 window1 [1,99]， window2[1 199], 这个会导致 [1,99] 这部分属性值所在的元组被拆分遣送到 2 个 window-extent 中, 在按照窗口进行计算的时候回因为 tuple 所属 2 个窗口导致重复计算从而导致计算结果出错.） 
-
+* 在 extent 函数定义中关于 '最大值' 的设定是为了处理边界元素划分的时候, 如果允许构建不完整的窗口范后会出现一种这样的情况: 当前窗口占了自身和下一个窗口的 min-WATTR(T) 的属性字段. (说明: 这里的描述等同于开闭区间,例如, window1 所包含的属性数值本应是 [1,99], window2 [100, 199] 但是如果不加一个 max 取最大值操作的话, 会出现一种 window1 [1,99]， window2[1 199], 这个会导致 [1,99] 这部分属性值所在的元组被拆分遣送到 2 个 window-extent 中, 在按照窗口进行计算的时候回因为 tuple 所属 2 个窗口导致重复计算从而导致计算结果出错.） 
 
 * For example, in Q1, window extents 0 through 3 are partial, and they are of length 1, 2 , 3, 4 minutes respectively. 
 * 例如窗口查询语句 Q1 中0 到 3 这些部分窗口范围, 它们的窗口时长分别是1,2,3,4 分钟. 
@@ -790,10 +785,10 @@ Q3: SELECT seg-id, count(*)
 ```
 
 * The ```windows``` and ```extent``` function above also apply to tumbling windows, and natually extend to landmark windows. 
-* 上述介绍的 ```windows``` 和 ```extent``` 这两方法同样也适用于 tumbling 类型的窗口, 所以也可顺利成章地过渡到 landmark 类型的窗口上. 
+* 上述给出的关于 ```windows``` 和 ```extent``` 这两函数的定义同样适用于 tumbling 类型窗口, 也可顺利成章地过渡到 landmark 类型的窗口上. 
 
 * Tumbling window is a special case of sliding windows, where RANGE equals SLIDE and thus window extents do not overlap.
-* Tumbling 窗口类型的特别之处在于窗口向前滑动的方式: 每次窗口向前滑动的步长和窗口自身大小是相同的, 所以无需担心生成的 window-extents 中会存在元组重复归到多个 window-extents 的情况. 
+* Tumbling 这种类型的窗口其特别之处在于窗口向前滑动的方式: 每次窗口向前滑动的步长和窗口自身大小是相同的, 所以无需担心生成的 window-extents 中会存在相同元组会同时归属于相同 window-extents 的情况. 
 
 ```
 读到这里我大概明白一点上面的 max 这里的叙述了, 上述窗口为普通窗口, 在 SLIDE 即滑动步长 < RANGE 窗口范围的情况下, 每次向前滑动一步都存在窗口的叠加,如果不将 window-extent 的起始值设定为起始最小值与 min-TATTR(T) + (w+1)*SLIDE - RANGE 二者取最大数值的话, 在窗口滑动未超过 RANGE 窗口大小本身的时候, 会将每次移动的步长重复计算多次导致计算结果不正确
@@ -806,7 +801,7 @@ Q3: SELECT seg-id, count(*)
 * 元组粒度步长窗口查询中, 如 Q3 查询语句, 是另一种 sliding 类的窗口查询类型.
 
 * For this type of windows, the number of window extents is data-dependent and we do not use a simple integer sequence for window-ids.
-* 对于此种窗口类型, 生成的 window-extent 总数中由每次向前滑动的元组个数来决定, 并且我们也无需单独创建简单整型数列来作为 window-ids 了. 
+* 对于此种窗口类型, 生成的 window-extent 总数中由每次向前滑动的元组个数来决定, 并且我们也无法使用简单整型数值来作为 window-ids 使用了. 
 
 * Instead, we use values of T.RATTR -- the projection of input tuples on RATTR -- for window-ids. 
 * 我们不用简单整型数列, 而是用元组中通过 RATTR 关键字修饰的属性字段所对应的元组中的具体数值所投影构成的集合, 作为新的 window-ids(集合).
@@ -819,14 +814,14 @@ Q3: SELECT seg-id, count(*)
 * The ```windows``` and ```extent``` functions for slide-by-tuple windows are given below. 
 * 元组粒度步长窗口类型中的 ```windows``` 与 ```extent``` 函数的定义描述如下:
 
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming-papers/png/type_2.png)
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/spark-streaming/papers/png/type_2.png)
 
 
 * Assuming unique RATTR values, each RATTR attribute value identifies a window extent that ends at that tuple. 
 * 假设 RATTR 属性字段的数值是唯一的, 那么每个 window-extent 窗口范围中最后的那个元组中 RATTR 属性字段所对应的数值便可拿来作为该 window-extent 的唯一标识. 
 
 * A variation on slide-by-tupe windows is windows for which the SLIDE is n tuples. 
-* 对于(单)元组粒度步长窗口类型而言, 如果每次滑动步长从单元组粒度变为 n 个元组粒度的话, 我们便有了一个 (单)元组粒度步长类型窗口的一个变种 -- （n） 元组粒度步长.
+* 对于(单)元组粒度步长窗口类型而言, 如果每次滑动步长从单元组粒度变为 n 个元组粒度的话, 我们便有了一个 (单)元组粒度步长类型窗口的一个变种 -- （n） 元组粒度步长窗口.
 
 * Here, every n-th tuple defines a window extent. 
 * 也就是, 每 n 个元组划分成一个 window-extent. 
@@ -844,8 +839,7 @@ Q3: SELECT seg-id, count(*)
 
 
 * The windows definition uses a ```rank(t, attr, T)``` function, which, given a tuple t and attribute attr, returns t's rank in T in the order of attr. 
-* 在此种类型的窗口定义中, 会调用 ```rank(t, attr, T) ``` 这个函数, 这个函数传入参数是标识元组 tuple 的 t, 元组中排列属性的 attribute attr, 返回的数值是元组 t 的 attr 元素数值在元组集合 T 中的排序顺序. 
-
+* 在此种类型的窗口定义中, 会调用 ```rank(t, attr, T) ``` 这个函数, 这个函数传入参数是标识元组 tuple 的 t, 元组中排列属性的 attribute attr, 返回的数值是元组 t 的 attr 元素数值在元组集合 T 中的排序顺序.
 
 ```
 其实在这个地方我一直有一个疑问,T 元组集合也就是 stream 的构成的实体对象, 不是一个 infinite ， disorder 的么, 说是disorder 我是理解的, 
@@ -854,12 +848,12 @@ Q3: SELECT seg-id, count(*)
 但是这样也不对, 流系统不会开辟很大的内存空间来容纳所有流数据的元组, 通常计算都是面向局部的, 所以达到的数据元组的排序也是不对的
 ```
 
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming-papers/png/type_4.png)
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming/papers/png/type_4.png)
 
 * For partitioned tuple-based window queries, such as Q4, window-ids are compound values consisting of a non-negative integer representing a window extent in a partition and a partitioning attribute value. 
 * Q4 这种类型的窗口查询语句是属于基于元组分区窗口查询, 在这种窗口类型中, window-id 是由标识 window-extent 所在分区的非负整数和分区中包含的属性字段这两个数值组合而成的.
 
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming-papers/png/type_5.png)
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming/papers/png/type_5.png)
 
 * Here T.PATTR means the projection of T on PATTR. The extent function in this case determines the content of the window extent based both on its integer index and partition attribute value. 
 * 在上述的表达式中, T.PATTR 这个字段的含义是用来描述元组集合 T 中的每个元组的 PATTR 属性字段对应的数值所投射而成的集合. 而此种类型的窗口定义中, ```extent``` 这个方法会基于 window-extent 的整型非负数索引数值 和 PATTR 属性字段对应的数值 这两个数值来判断某个元组应该被划分到那个 window extent 中. 
@@ -875,22 +869,39 @@ Q3: SELECT seg-id, count(*)
 其实我还在担心内存是否能够将全部达到数据存放处理, 但是至少能确定的是所有到达元组数据是有限的集合, 
 虽然前文中有提到 T 是 infinite 的, 但是这里姑且算 T 是finite 来考虑好了~
 ```
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming-papers/png/type_6.png)
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming/papers/png/type_6.png)
 
 
+#### 3.4 Mapping Tuples to Window-ids 
+#### 3.4 将数据流中的元组与 Window-ids 进行关联
 
+* The ```extent``` function defines window semantics in a window-centric way from the perspective of understanding the content of each ```window extent```. 
 
+* ```extent``` 函数以窗口为中心尝试理解每个 ```window-extent``` 中数据的内容这一视角为出发点给出了窗口语义的定义. 
+```
+这里一句话总结了 3.3 节中的主要内容, 也就是在窗口语义体系中的 3 个函数中的 2 个, 再次回顾下 3 个函数分别是 extent, window, wids, 第 3.4 小节主要介绍的就是这个 wids 
+```
 
+* In this section, we define the function, wids, which is a relational inverse to the extent function, that maps each input tuple to a set of window-ids (representing window extents). 
+* 在本节, 我们给出 wids 这一函数的定义, wids 函数中执行投影刚好与 extent 函数中执行的投影关系互逆, extent 函数是专门将输入数据流中的元组投射到一组 window-id 中(而可以将每个 window-id 看做是 window exents 的唯一标识符, 即 1 个 window-id 唯一标识 1 个 window extent).
 
+* The wids function provides the same window semantics information, in tuple-centric manner. 
+* 对于 wids 函数而言, 它同样也提供了相同的窗口语义信息, 只不过视角是以输入数据流中的元组为行为主体为出发点的.
 
+```
+上一句中的行为主体, 这个地方指的是, wids 中如果定义一系列面向对象类中的函数, 这些函数的执行者必定是站在 wids 的角度定义的. 下一句中会对 ‘in tuple-centric manner’ 是什么意思进行讲解. 
+```
+* Intuitively, this tuple-centric version of the window semantics definition corresponds to operations on each input tuple in the implementation. 
+* 通常情况下, 以上游数据流中元组为中心出发的窗口的语义定义中都是与处理每个输入元组而执行处理方法的具体实现相关的.
 
+* For a given window type, let W = windows(T,S). 
+* 对于已知类型的窗口而言, 我们使用 W=windows(T,S) 这个表达式来定义这个窗口.
 
-
-
+* Then, for a tuple t, wids(t,T,S) is the set of window-ids in W, identifying window extent to which tuple t belongs: wids (t, T, S) = { w ∈ W | t ∈ extent(w)}.
+* 而, 对于给定的一个元组 t 而言, wids(t, T, S) 这个函数映射的是一组窗口 W 中所包含的 window-id 集合,  wids(t, T, S) 标识了都有哪些元组 t (我们用 t 标识任意一个元组) 属于这个 window-extent/ 窗口范围: wids(t, T, S) = { w ∈ W | t ∈ extent(w)}.   
 
 
 ----
-
 文章看到这里最大的感受就是, 每篇论文在阐述概念的时候都是先举一个案例,
 然后基于这个案例，先抛出一个抽象描述,后面结合这个最开始抛出的案例给出特例说明防止读者读完抽象描述不理解, 或是加固读者将抽象用在普通说明中的理解
 如果在给出抽象描述这里, 自己先思考下可能性, 以及觉得有问题的地方, 再读后面的 For example.. 这里会发现很多提出的问题都有相关的答案,
