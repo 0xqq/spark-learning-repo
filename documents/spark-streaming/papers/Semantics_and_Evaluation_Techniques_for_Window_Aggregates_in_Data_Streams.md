@@ -829,7 +829,7 @@ Q3: SELECT seg-id, count(*)
 * The ```extent``` function is the same as that of slid-by-tuple windows and the ```windows``` function is given by: 
 * 将 ```extent``` 方法保持和元组粒度步长窗口类型一致, 而 ```windows``` 函数定义描述如下: 
 
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming-papers/png/type_3.png)
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/spark-streaming/papers/png/type_3.png)
 
 * For windows in which the SLIDE is n tuples over the logical order of the stream on the RATTR, as shown in Q5, the extent function is also the same as that of slide-by-tuple windows. 
 * 将滑动步数的粒度设定为 n 个元组,且这 n 个元组的顺序是按照 RATTR 该属性字段在到达数据流中的顺序来排列的, 如 Q5 查询语句一样, 即便是这样, 窗口定义中的 ```extent``` 函数仍旧保持与元祖粒度步长窗口类型中的 ```extent``` 函数定义是一致的.  
@@ -845,12 +845,12 @@ Q3: SELECT seg-id, count(*)
 但是这样也不对, 流系统不会开辟很大的内存空间来容纳所有流数据的元组, 通常计算都是面向局部的, 所以达到的数据元组的排序也是不对的
 ```
 
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming/papers/png/type_4.png)
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/spark-streaming/papers/png/type_4.png)
 
 * For partitioned tuple-based window queries, such as Q4, window-ids are compound values consisting of a non-negative integer representing a window extent in a partition and a partitioning attribute value. 
 * Q4 这种类型的窗口查询语句是属于基于元组分区窗口查询, 在这种窗口类型中, window-id 是由标识 window-extent 所在分区的非负整数和分区中包含的属性字段这两个数值组合而成的.
 
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming/papers/png/type_5.png)
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/spark-streaming/papers/png/type_5.png)
 
 * Here T.PATTR means the projection of T on PATTR. The extent function in this case determines the content of the window extent based both on its integer index and partition attribute value. 
 * 在上述的表达式中, T.PATTR 这个字段的含义是用来描述元组集合 T 中的每个元组的 PATTR 属性字段对应的数值所投射而成的集合. 而此种类型的窗口定义中, ```extent``` 这个方法会基于 window-extent 的整型非负数索引数值 和 PATTR 属性字段对应的数值 这两个数值来判断某个元组应该被划分到那个 window extent 中. 
@@ -866,7 +866,7 @@ Q3: SELECT seg-id, count(*)
 其实我还在担心内存是否能够将全部达到数据存放处理, 但是至少能确定的是所有到达元组数据是有限的集合, 
 虽然前文中有提到 T 是 infinite 的, 但是这里姑且算 T 是finite 来考虑好了~
 ```
-![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/streaming/papers/png/type_6.png)
+![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/spark-streaming/papers/png/type_6.png)
 
 
 #### 3.4 Mapping Tuples to Window-ids 
