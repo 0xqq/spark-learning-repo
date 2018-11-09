@@ -1,13 +1,14 @@
 * 说明, 任何文章可通过 [链接](https://github.com/Kylin1027/streaming-readings/blob/master/README.md) + 手动搜索论文名称来查询到下载链接地址
 
-# TODO: 本文中的 Evaluation 其实是我一直理解错误了, 在看了 Flink 中的 [Evaluation](https://github.com/Kylin1027/flink-learning-repo/blob/master/documents/flink-window-introducing.md) 相关博客之后, 才发现这个 Evaluation 实际上指的是
-# 基于窗口中的元素进行计算的方法, 而非窗口执行计算的是偶对计算函数进行时间空间复杂度的估值函数，所以通篇的翻译需要进行重新整理
-# 这里的 Evaluation  = Window Operation = the operator performed upon Window 
+#### TODO: 本文中的 Evaluation 其实是我一直理解错误了, 在看了 Flink 中的 [Evaluation](https://github.com/Kylin1027/flink-learning-repo/blob/master/documents/flink-window-introducing.md) 相关博客之后, 才发现这个 Evaluation 实际上指的是基于窗口的计算, 而并非对基于窗口查询的估值
+
+#### 基于窗口中的元素进行计算的方法, 而非窗口执行计算的是偶对计算函数进行时间空间复杂度的估值函数，所以通篇的翻译需要进行重新整理
+#### 这里的 Evaluation  = Window Operation = the operator performed upon Window 
 
 
 ##Semantics and Evaluation Techniques for Window Aggregates in Data Streams
 
-##数据流中基于窗口聚合的语义与估值方法
+##数据流中基于窗口聚合的语义与计算方法
 
 ###Abstract 
 
@@ -38,7 +39,7 @@ of windows of which we are aware, and which is easily extensible to other types 
 
 Based on this definition, we explore a one-pass query evaluation strategy, the Window-ID (WID) approach, for various types of window
 aggregate queries. 
-基于这种窗口的定义, 我们研究出了一次性对查询语句执行代价估值的策略, 我们将其称为是 Window-ID 方法, 简称为 WID 方法, 基于这种方法
+基于这种窗口的定义, 我们研究出了一次性对查询语句执行查询计算的策略, 我们将其称为是 Window-ID 方法, 简称为 WID 方法, 基于这种方法
 我们能够对任何一种基于窗口聚合的查询进行代价估计.
 
 WID significantly reduces both required memory space and execution time for the large class of window definitions. 
@@ -51,7 +52,7 @@ In addition, WID can leverage punctuations to gracefully handle disorder.
 Our experimental study shows that WID has better execution-time performance than existing window aggregate query evaluation-time 
 performance than existing window aggregate query evaluation options that retain and reprocess tuples, and has better latency-accuracy
 tradeoff performance for disordered input streams compared to using a fixed delay for disorder handling. 
-我们的研究证明: 在对窗口聚合查询的执行时间评估方面, 使用 WID 方法要优于已有通过保留数据流中的元组并通过重新执行来评估执行时间的方法,
+我们的研究证明: 在对窗口执行聚合查询操作时, 使用 WID 方法要优于已有通过保留数据流中的元组再执行聚合查询操作时, 前者要比后者在时间开销要小很多,
 , 而对于处理乱序的数据而言, 先比较于现有通过固定延迟来处理无需数据, WID 方法有着更精确的延迟处理方法(这里并不是很理解 latency-accuracy tradeoff 是什么意思,
 导致这句话翻译的并不是很清楚)。
 
@@ -66,7 +67,6 @@ and auction bids, to name a few.
 For applications monitoring and processing streams, window aggregates are an important query capacity. 
 对于用来监控和处理流数据的应用, 基于窗口的聚合操作是该应用需要具备的重要查询能力。
 
-
 A window specifies a moving view that decomposes the stream into (possibly overlapping) subsets that we call window extents, 
 and computes a result over each.
 窗口定义了一个这样的移动视图: 流数据会被分割成(或者是彼此叠加的)数据子集, 而这个数据子集便称作 '窗口范围'.
@@ -76,12 +76,10 @@ and computes a result over each.
 
 For example, "compute the number of vehicles on I-95 between milepost 205 and milepost 245 over the past 10 minutes; udpate the count every 1 minute" 
 is a window aggregate query where successive window extends overlap by 9 minutes.
-举个例子, 让你"计算出在过去的 10 分钟内位于 I95(公路上 真不知道 I95 是个啥) 205 至 245 英里范围内经过的机动车辆的数目; 然后按照每 1 分钟的频率更新统计出的数目" 
-这个应用场景便是基于窗口的聚合查询操作, 在这个聚合查询中查询结果通过基于连续的窗口以 9 分钟为时间单位叠加查询统计得到.
-
+举个例子, 让你"计算出在过去的 10 分钟内位于 I95(公路上 真不知道 I95 是个啥) 205 至 245 英里范围内经过的机动车辆的数目; 然后按照每 1 分钟的频率更新统计出的数目" 这个应用场景便是基于窗口的聚合查询操作, 在这个聚合查询中查询结果通过基于连续的窗口以 9 分钟为时间单位叠加查询统计得到.
 
 Evaluation window aggregate queries over streams is non-trivial.
-置于数据流上的窗口聚合查询代价估算是十分有用的(后面的几行文字就是对估值的作用进行介绍说明).
+置于数据流上的窗口聚合查询计算是十分有用的.
 
 The potential for high data arrival rates, and huge data volumes, along with near real-time requirements in many stream applications make memory and 
 execution critical. 
@@ -96,7 +94,7 @@ or high latency in the output of the results.
 (流计算中计算结果延迟输出会导致环环相扣的下游窗口聚合计算结果的计算精度受损或是出错,是比较严重的问题)
 
 We have observed that accommodating out-of-order data arrival can introduce much complexity into window query evaluation.
-我们观察到对乱序到达数据处理的不当会大大增大窗口查询估值的复杂度.
+我们观察到对乱序到达数据处理的不当会大大增大窗口查询的复杂度.
 
 
 We see two major issues with current stream query systems that process window queries.
@@ -110,11 +108,10 @@ As a result, the exact content of each window extents to be confused with window
 (这个问题后续的有篇论文中也有介绍过, 就是因为窗口这里的定义引发的混淆导致流系统在实现过程中对流数据处理在物理和逻辑层面的划分存在了很大的问题,
 也正是低水位概念提出的原因)
 
-The other is implementation efficiency , in particular, memory usage and evalution time. 
-另一个便是实现后执行起来的效率问题, 特别是在内存和估值时间这两个地方。
+The other is implementation efficiency , in particular, memory usage and evaluation time. 
+另一个便是实现后执行起来的效率问题, 特别是在内存和计算方面的时间开销. 
 
-To evaluate sliding window aggregate queries where consecutive window extends overlap (i.e. each tuple belongs to multiple window extends),
-most current proposals for window queries keep all active input tuples in an in-memory buffer.
+To evaluate sliding window aggregate queries where consecutive window extends overlap (i.e. each tuple belongs to multiple window extends), most current proposals for window queries keep all active input tuples in an in-memory buffer.
 为了当对连续且叠加(同一个元组位于多个窗口范围内)的滑动窗口聚合查询估值时,目前最常用的方法便是将所有处于活跃状态的上游输入数据保存在内存缓冲区中
 (未知上限的内存开销,内存开销过大不说也容易引起OOM)
 
