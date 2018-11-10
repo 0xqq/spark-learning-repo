@@ -231,3 +231,9 @@ abstract class TaskContext extends Serializable {
     private[spark] def setFetchFailed(fetchFailed:FetchFailedException):Unit 
 
 }
+
+// Spark 中以 DAGScheduler 为核心的任务调度处理逻辑相关模块, 如果能单独抽取出来, 作为一个单独的模块的话, 会是一个很优秀的任务资源调度器的
+// 以及, 也可以比较一下 Yarn + Queue 调度机制 和 Spark DAG 调度二者的不同之处, 
+// 其实不同的地方还是很多的, Yarn + Queue 这里的处理逻辑, 更加侧重于将 Queue 进行按照树形结构进行划分, 以及资源 CPU/MEM 粒度的划分
+// 而 Spark 这里更加侧重于 DAG 这里 Graph 的生成和切分, 使用 Action 作为切分 DAG 图的栅栏, 而在 Task 进行调度的时候仅仅通过 
+// 线程池 + FIFO 的队列来处理每个 Task, 不过无论如何 如果能将 yarn + queue 和 spark + dag 这两个模块单独剥离出来的话会很有意思 
