@@ -891,7 +891,7 @@ window extent 由多个 tuple 所构成的集合, 这些 tuple 的特点便是�
 
 
 * Intuitively, this tuple-centric version of the window semantics definition correspondings to operations on each input tuple in the implementation. 
-* 理所当然地, 这种以 元组 为中心的窗口语义给出的定义在实现上是与每个数据流中的元组操作处理相关的.<p/>
+* 理所当然地, 这种以 元组 为中心的窗口语义给出的定义在代码实现上是与每个数据流中的元组操作处理相关的.<p/>
 
 * For a given window type, let W = windows(T,S). 
 * 对于类型已知的窗口(窗口类型已知, 窗口的映射函数 S 便已知), 我们将基于数据流中的全量元组使用 T 表示, S 是作用于数据流中无限元组集合 T 上映射生成的所有唯一标识 window-extent 的 window-id 集合.</p>
@@ -938,8 +938,28 @@ w ≤ (r + RANGE – minrow-num(T)) / SLIDE –1}.
 * The proof consists of two cases, based on whether min-WATTR(T) is greater than min-WATTR(T) + (w+1) * SLIDE - RANGE 
 * 证明过程由两种案例情况所构成, 取决于 min-WATTR(T) 数值是否大于 min-WATTR(T) + (w+1) * SLIDE - RANGE. 
 
+##### Discussion:
+##### 讨论:
+* Our window specification is quite expressive, and the semantic framework suggests a general way to define window semantics.
+* 我们在上述给出的窗口语义灵活度很高, 而对于整个窗口语义体系而言, 则希望能以一种更为普通的方式来描述窗口语义. <p/>
 
+* We have discussed existing types of windows that we have seen.
+* 在这里我们仅就我们所见过的窗口类型进行讨论. <p/>
 
+* However, well-defined windows in our window specification are not guaranteed to be meaningful; further, ```wids``` functions of well-defined windows might not be computable. 
+* 然而, 在我们的窗口定义中不能确保定义的面面俱到, ```wids``` 这个函数对于已经定义十分完备的窗口而言, 获取会有所缺失. 
+
+```
+等等作者, 我记得你在文章开头的时候, 可不是这么说的啊, 当时说的底气满足的啊:
+“To address this problem, we propose a framework for defining window semantic, which can be used to express almost all types
+of windows of which we are aware, and which is easily extensible to other types of windows that may occur in the future.“
+```
+
+* It remains an open question and future work for us to characterize the functions used in the framework in order to guarantee a feasible implementation of ```wids``` function. 
+* 这个就算留下了一个开放式问题, 并成为了未来的工作中我们在窗口语义体系中所着重研究的方法, 目的是为了让开发者在代码实现中有更加灵活的方式来实现这个  ```wids``` 函数. 
+
+#### BEYOND SEMANTICS: Towards Window Query Evaluation 
+#### 语义之上的: 基于窗口的查询
 
 
 
