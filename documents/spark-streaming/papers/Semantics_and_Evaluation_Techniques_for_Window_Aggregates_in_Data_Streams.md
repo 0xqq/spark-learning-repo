@@ -947,7 +947,7 @@ w ≤ (r + RANGE – minrow-num(T)) / SLIDE –1}.
 * 在这里我们仅就我们所见过的窗口类型进行讨论. <p/>
 
 * However, well-defined windows in our window specification are not guaranteed to be meaningful; further, ```wids``` functions of well-defined windows might not be computable. 
-* 然而, 在我们的窗口定义中不能确保定义的面面俱到, ```wids``` 这个函数对于已经定义十分完备的窗口而言, 获取会有所缺失. 
+* 然而, 在我们的窗口定义中不能确保定义的面面俱到, ```wids``` 这个函数对于已经定义十分完备的窗口而言, 或许会有所缺失. 
 
 ```
 等等作者, 我记得你在文章开头的时候, 可不是这么说的啊, 当时说的底气满足的啊:
@@ -959,8 +959,57 @@ of windows of which we are aware, and which is easily extensible to other types 
 * 这个就算留下了一个开放式问题, 并成为了未来的工作中我们在窗口语义体系中所着重研究的方法, 目的是为了让开发者在代码实现中有更加灵活的方式来实现这个  ```wids``` 函数. 
 
 #### BEYOND SEMANTICS: Towards Window Query Evaluation 
-#### 语义之上的: 基于窗口的查询
+#### 基于窗口语义之上的(操作): 基于窗口执行查询
+* To map from a tuple to a set of window-ids, the ```wids``` functions for different types of windows require different information. 
+* 为了将 1 个元组映射生成一个 window-id 集合, 不同类型的窗口所传递给 ```wids``` 函数的信息(也就是参数) 是不同的. 
 
+* In this section, we categorize different types of information that may be required in mapping tuples to sets of window-ids, and classify windows based on this requirement.
+* 在本节, 我们根据传递给将多个元组映射生成多组对应的 window-id 集合的 ```wids``` 函数信息的不同, 并基于传递不同信息为依据来对窗口进行分类. 
+
+* That categorization in turn helps dictate the appropriate implementation techniques for given types of windows. 
+* 这种类型的划分, 返回来也有助于根据给定类型的敞口选取合适的实现机制. 
+
+* We define two types of "context" information that may be involved in the implementation of a ```wids``` function: backward-context and forward-context. 
+* 我们定义了两种类型的 "上下文" 信息, 在 ```wids``` 函数的实现过程中可能会涉及到对相关概念的使用: 后序-上下文信息和 先序-上下文信息. 
+
+* Given a tuple t, its backward-context is information about tuples that have arrived before t. 
+* 对于给定的元组 t, 它的后序-上下文信息便是指,数据流的元组中所有在元组 t 之后到达的元组. 
+
+* Forward-context is information about tuples that will arrive after t. 
+* 而其先序-上下文信息值得便是数据流元组中所有在 t 元组之后到达的元组. 
+
+* If a ```wids``` function requires backward-context, it implies that the implementation will need to maintain information about previously arrived tuples. 
+* 如果 ```wids``` 这个函数需要 后序-上下文信息的话, 这就意味着在 ```wids``` 函数的实现中需要(开辟空间以)保存所有先于元组 t 达到的元组信息. 
+
+* For example, the implementation of a partitioned tuple-based window must maintain a count of tuples that have arrived for each partition. 
+* 例如, 对于基于-元组 分区类型的窗口来说, 它必须逐一为每个分区保存对应数目的元组. 
+
+* Typically, having to mantain backward-context is not a significant restriction, and does not prevent one from determining window-ids immediately upon tuple arrival. 
+* 通常来说, 保存 后序-上下文信息并不是十分的严格, 并且也不会阻止当元组一到达立即为其映射生成其所属的 window-extent 的 window-id. 
+
+* In contrast, if a ```wids``` function requires forward-context, then information from tuples arriving after a tuple t is required to calculate the window-ids for t. 
+* 而与此正相反, 如果 ```wids``` 函数中需要 先序-上下文信息的话, 为了得到元组 t 所属于那个 window-id 所标识的 window-extent 的话, 需要保留所有在元组 t 之后到达的元组信息进行计算之后才能得到. 
+
+* This requirement implies that the exact window-ids for tuple t cannot all be determined until those tuple arrive. 
+* 这种要求便意味着, 当前元组 t 的确切 window-ids 需要等到所有 t 依赖的元组全部到达之后才能计算得到. 
+
+* Thus a ```wids``` function requiring forward-context implies that tuples may need to be buffered and delayed. 
+* 由此可以推断出, 那些需要 先序-上下文信息的 ```wids``` 函数不得不把可能会参与到计算中的元组全部缓存起来, 并且计算受元组到达的影响有可能出现延迟. 
+
+* The ```rank``` function in the ```wids``` definition for partitioned windows (e.g., Q4) reflects a backward-context requirement, because ```rank``` uses row-num as the attribute to define order on; and using the RATTR-values of later tuples (i.e., t.RATTR = w < t.RATTR + RANGE) in the wids definition for slide-by-tuple windows (e.g., Q3) reflects a forward-context requirement. 
+* ```wids``` 函数中用于分区的函数 ```rank``` (例如, Q4 查询语句)实质上便是需要 后序-上下文信息的一种函数表达式, 因为 ```rank``` 函数中会使用到所有到达的元组的列-数目来作为执行排序算法的属性字段; 而在像 Q3 这种以 元组-为-步长的查询语句中, 所使用到的需要知道当前元组后续到达的元组中的 RATTR 字段的数值这种需求, 在 ```wids``` 函数中便会作为需要借助于 后序-上下文信息才能实现函数中的计算.
+
+* We categorize windows into FCF(forward-context free), and FCA(forward-context aware), primarily based on their forward-context requirements (Characterizing each category is an interesting open question). 
+
+* We define a window as FCF if the wids implementation does not require forward-context.
+
+* Time-based windows, tuple-based sliding windows, and partitioned tuple-based windows are FCF. 
+
+* We define a window as FCA(forward-context aware) if the wids implementation requires forward-context. 
+
+* Slide-by-tuple windows and its two variations (slide by n tuples over row-num and rank(RATTR), respectively) are FCA. 
+
+* Under the FCF category, we define a window as CF (context free) if the impl
 
 
 ----
