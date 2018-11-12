@@ -290,7 +290,7 @@ Each window extent is a 5 minute sub-stream, which overlaps with adjacent window
 In our case, for example, window extent 10 is the 12:06PM - 12:11:00PM substream, and window extent 11 is the 12:07:00 PM - 12:12:00PM substream.
 在我们的这个事例中, 例如我们可以将时间戳位于 [12:06:00PM, 12:11:00PM] 范围内的子数据流构成窗口范围的 window id 设定为 10, 而tuple 的时间戳数值位于
 [12:07:00PM, 12:12:00PM] 这个数值范围内的元组构成的子数据流而对应的窗口范围使用 window id 11 来唯一标识(注意在这个应用场景中时间或者是说 tuple
-是存在交叠的, 即如果某个 tuple 的字段时间戳是 12:08:00PM 那么这个 tuple 是同时位于两个 窗口范围<window extend> 内的)
+是存在交叠的, 即如果某个 tuple 的字段时间戳是 12:08:00PM 那么这个 tuple 是同时位于两个 窗口范围(window extend) 内的)
 
 For each input tuple, we can calculate the window-ids for the window extends to which it belongs.
 在对输入的数据流打上了 WID 标注之后, 我们能获取到每个元组中的 window-id 这个数据字段,从而能够推算出这个元组都属于哪些窗口范围
@@ -869,33 +869,78 @@ Q3: SELECT seg-id, count(*)
 ![image](https://github.com/Kylin1027/spark-learning-repo/blob/master/documents/spark-streaming/papers/png/type_6.png)
 
 
+```
+说明: 
+在这里
+window && extent && wids 从前文可知, 他们都是函数, 所以在文章中出现地方不对其进行翻译
+window-id 是用来表示一个 window extent 的唯一 ID, 我们后续将其翻译为 窗口-ID 
+window extent 由多个 tuple 所构成的集合, 这些 tuple 的特点便是经由映射函数计算 Tuple 中的某个指定属性之后得到的 window-id 数值相同, 所以会被划分到 1 个相同的集合中,而这个集合便是 window extent, 我们后续将其翻译为 窗口-范围
+```
+
 #### 3.4 Mapping Tuples to Window-ids 
 #### 3.4 将数据流中的元组与 Window-ids 进行关联
 
-* The ```extent``` function defines window semantics in a window-centric way from the perspective of understanding the content of each ```window extent```. 
+* The ```extent``` function defines window semantics in a window-centric way from the perspective of understanding the content of each window extent. 
+* ```extent``` 是通过 ‘以一种以窗口为中心的视觉角度出发来阐述(understanding)每个窗口范围内所包含的内容’ 这种方式来定义窗口语义的. <p/>
 
-* ```extent``` 函数以窗口为中心尝试理解每个 ```window-extent``` 中数据的内容这一视角为出发点给出了窗口语义的定义. 
-```
-这里一句话总结了 3.3 节中的主要内容, 也就是在窗口语义体系中的 3 个函数中的 2 个, 再次回顾下 3 个函数分别是 extent, window, wids, 第 3.4 小节主要介绍的就是这个 wids 
-```
+* In this section, we define the function, ```wids```, which is a relational inverse to the ```extent``` function, and maps each input tuple to a set of window-ids (representing window extents).
+* 在本节, 我们将介绍 ```wids``` 函数所定义的窗口语义, ```wids``` 函数所描述的映射关系中的因变量和自变量的关系和 ```extent``` 函数恰好对调过来, (extent 是将 n 个来自数据流中的 tuple 映射到由 1 个 window-id 标识的 window-extent 中), ```wids``` 函数则是将 1 个 tuple 映射到由 n 个 window-id 所构成的集合中(每个 window-id 唯一标识 1 个 window-extent 也就是由 tuple 构成的集合).<p/>
 
-* In this section, we define the function, wids, which is a relational inverse to the extent function, that maps each input tuple to a set of window-ids (representing window extents). 
-* 在本节, 我们给出 wids 这一函数的定义, wids 函数中执行投影刚好与 extent 函数中执行的投影关系互逆, extent 函数是专门将输入数据流中的元组投射到一组 window-id 中(而可以将每个 window-id 看做是 window exents 的唯一标识符, 即 1 个 window-id 唯一标识 1 个 window extent).
+* The ```wids``` function provides the same window semantics information, in tuple-centric manner. 
+* ```widw``` 函数描述了与 ```extent``` 相同的窗口语义信息, 只不过是以元组为中心这一视角出发进行描述的.<p/>
 
-* The wids function provides the same window semantics information, in tuple-centric manner. 
-* 对于 wids 函数而言, 它同样也提供了相同的窗口语义信息, 只不过视角是以输入数据流中的元组为行为主体为出发点的.
 
-```
-上一句中的行为主体, 这个地方指的是, wids 中如果定义一系列面向对象类中的函数, 这些函数的执行者必定是站在 wids 的角度定义的. 下一句中会对 ‘in tuple-centric manner’ 是什么意思进行讲解. 
-```
-* Intuitively, this tuple-centric version of the window semantics definition corresponds to operations on each input tuple in the implementation. 
-* 通常情况下, 以上游数据流中元组为中心出发的窗口的语义定义中都是与处理每个输入元组而执行处理方法的具体实现相关的.
+* Intuitively, this tuple-centric version of the window semantics definition correspondings to operations on each input tuple in the implementation. 
+* 理所当然地, 这种以 元组 为中心的窗口语义给出的定义在实现上是与每个数据流中的元组操作处理相关的.<p/>
 
 * For a given window type, let W = windows(T,S). 
-* 对于已知类型的窗口而言, 我们使用 W=windows(T,S) 这个表达式来定义这个窗口.
+* 对于类型已知的窗口(窗口类型已知, 窗口的映射函数 S 便已知), 我们将基于数据流中的全量元组使用 T 表示, S 是作用于数据流中无限元组集合 T 上映射生成的所有唯一标识 window-extent 的 window-id 集合.</p>
 
-* Then, for a tuple t, wids(t,T,S) is the set of window-ids in W, identifying window extent to which tuple t belongs: wids (t, T, S) = { w ∈ W | t ∈ extent(w)}.
-* 而, 对于给定的一个元组 t 而言, wids(t, T, S) 这个函数映射的是一组窗口 W 中所包含的 window-id 集合,  wids(t, T, S) 标识了都有哪些元组 t (我们用 t 标识任意一个元组) 属于这个 window-extent/ 窗口范围: wids(t, T, S) = { w ∈ W | t ∈ extent(w)}.   
+* Then, for a tuple t, wids(t, T, S) is the set of window-ids in W, identifying windw extent to which tuple t belongs: wids (t, T, S) = { w∈W | t ∈ extent(w)}. 
+* 然后, 已知 1 个元组 t, 那么由 wids(t, T, S) 表达式所描述的便是 1 个由多个 window-ids 所构成的 W 的子集, 而这个元组 t 属于由 window-id 所构成的集合中的每个元素也就是每个 window-id 所唯一标识的 window-extent. (而这个 window-extent 我们在文章一开始特意提到, 它是由唯一 window-id 标识的由 tuple 构成的集合), 这种关系描述如下 wids (t, T, S) = { w∈W | t ∈ extent(w)}.</p>
+
+* The ```wids``` function for non-partitioned windows whose RANGE and SLIDE are both specified on the WATTR attribute, such as Q1 and Q2, is defined as follows:
+* 作用于非-分区窗口也就是窗口定义中的 RANGE 和 SLIDE 均保持与 WATTR 属性相同 的 ```wids``` 函数的定义语句如下所示:<p/>
+
+```
+wids (t, T, S[RANGE, SLIDE, WATTR]) =
+{w∈W | (t.WATTR – minWATTR(T)) / SLIDE – 1 < w
+≤ (t.WATTR + RANGE – minWATTR(T)) / SLIDE –1}.
+```
+
+* Note that in the ```wids``` function above, a tuple t is mapped to a set of window-ids, without reference to other tuples nor to t's arrival position in T. 
+* 注意, 在上述所描述的 ```wids``` 函数中, 1 个 tuple 通过映射会生成多个 window-id, 在没有牵涉到其他元组或是 t 元组在到达数据流中元组 T 中的位置之后. <p/>
+
+* For slide-by-tuple windows such as Q3, and its two variations, the ```wids``` function is given by 
+* 对于以 元组-为-步长 的窗口而言, 如 Q3 查询语句即基于 Q3 语句的两个变种查询语句, 其 ```wids``` 的定义描述如下
+```
+wids (t, T, S[RANGE, RATTR, 1, row-num]) =
+{ w∈W | t.RATTR = w < t.RATTR + RANGE}
+```
+* Here, the window-ids of window extents to which tuple t belongs fall between t.RATTR and t.RATTR + RANGE. 
+* 在上述的式子中, t 所属于的 每个 window-id 所描述的 window-extent/窗口范围是落在 [t.RATTR, t.RATTR + RANGE] 范围内的. </p>
+
+* For partitioned tuple-based windows, the wids function is given below, where r = rank(t, row-num, PATTR, T):
+* 而基于-元组分区的窗口类型而言, 其 ```wids``` 函数的定义描述如下, 其中 r = rank(t, row-num, PATTR, T):
+
+```
+wids (t, T, S[RANGE, row-num, PATTR]) =
+{(i, p)∈W | t.PATTR = p, (r – minrow-num(T)) / SLIDE – 1 <
+w ≤ (r + RANGE – minrow-num(T)) / SLIDE –1}.
+```
+
+* The correctness of each ```wids``` definition can be verified using corresponding ```extent``` definition. 
+* 对于使用 ```wids``` 函数所描述映射关系是否正确, 可以使用对应的 ```extent``` 函数来验证. 
+
+* We have proved the inverse relationship of ```extent``` and ```wids``` pairs discussed.
+* 我们已经证明了 ```extent``` 函数与 ```wids``` 函数二者是翻转的关系. 
+
+* The proof consists of two cases, based on whether min-WATTR(T) is greater than min-WATTR(T) + (w+1) * SLIDE - RANGE 
+* 证明过程由两种案例情况所构成, 取决于 min-WATTR(T) 数值是否大于 min-WATTR(T) + (w+1) * SLIDE - RANGE. 
+
+
+
+
 
 
 ----

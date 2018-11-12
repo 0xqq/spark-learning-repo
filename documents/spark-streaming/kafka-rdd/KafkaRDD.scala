@@ -360,7 +360,7 @@ class KafkaRDD[
         // 然后将 TopicAndPartition.topic, TopicAndPartition.partition, fo:Long 这个 offset 数值和 offset:LeaderOffset 数值
         // 用这些数值来创建并实例化 OffsetRange, 最后调用 toArray 方法将转换生成的 OffsetRange 转换为 Array
         // 最后调用 KafkaRDD 类中定义的构造函数来构造 KafkaRDD 对象实例
-        
+
         val offsetRanges = fromOffsets.map { case (tp, fo) => 
             val uo = untilOffsets(tp)
             OffsetRange(tp.topic, tp.partition, fo, uo.offset)
@@ -368,5 +368,4 @@ class KafkaRDD[
 
         new KafkaRDD[K, V, U, T, R](sc, kafkaParams, offsetRanges, leaders, messageHandler)
     }
-
  }
