@@ -340,15 +340,33 @@ class KafkaRDD[
         U <: Decoder[_]: ClassTag,
         T <: Decoder[_]: ClassTag,
         R:ClassTag](
-
         sc:SparkContext, 
         kafkaParams:Map[String, String],
         fromOffsets:Map[TopicAndPartition, Long],
         untilOffsets:Map[TopicAndPartition, LeaderOffset],
         messageHandler:MessageAndMetadata[K,V] => R
        ):KafkaRDD[K,V,U,T,R] = {
-       
+        // apply 方法中会将传入参数经由计算最终转换为 KafkaRDD[K,V,U,T,R] 类型的 RDD 
 
+        // 在这里遍历传入参数 untilOffsets:Map[TopicAndPartition, LeaderOffset] 中的 key value 对
+        // 将 [TopicAndPartition, LeaderOffset] 类型转换为 TopicAndPartition -> (LeaderOffset.host, LeaderOffset.port) 
+        // 这种键值对, 最终转换为 Map 类型之后赋值给 leaders 变量
+        val leaders = untilOffsets.map { case (tp, lo) =>
+            tp -> (lo.host, lo.port)
+        }.toMap 
+
+        // 在这里使用和上面类似的元素遍历方法, 成(key,value) 对的方式遍历 fromOffsets:Map[TopicAndPartition, Long] 中的元素
+        // 然后根据 tp:TopicAndPartition 的 tp 到 leaders:Map[TopicAndPartition, LeaderOffset] 中获取其 value:LeaderOffset 实例 , 
+        // 然后将 TopicAndPartition.topic, TopicAndPartition.partition, fo:Long 这个 offset 数值和 offset:LeaderOffset 数值
+        // 用这些数值来创建并实例化 OffsetRange, 最后调用 toArray 方法将转换生成的 OffsetRange 转换为 Array
+        // 最后调用 KafkaRDD 类中定义的构造函数来构造 KafkaRDD 对象实例
+        
+        val offsetRanges = fromOffsets.map { case (tp, fo) => 
+            val uo = untilOffsets(tp)
+            OffsetRange(tp.topic, tp.partition, fo, uo.offset)
+        }.toArray 
+
+        new KafkaRDD[K, V, U, T, R](sc, kafkaParams, offsetRanges, leaders, messageHandler)
     }
 
  }
