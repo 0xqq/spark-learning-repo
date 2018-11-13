@@ -967,7 +967,7 @@ of windows of which we are aware, and which is easily extensible to other types 
 * 在本节, 我们根据传递给将多个元组映射生成多组对应的 window-id 集合的 ```wids``` 函数信息的不同, 并基于传递不同信息为依据来对窗口进行分类. 
 
 * That categorization in turn helps dictate the appropriate implementation techniques for given types of windows. 
-* 这种类型的划分, 返回来也有助于根据给定类型的敞口选取合适的实现机制. 
+* 这种类型的划分, 翻过来也有助于根据给定类型的敞口选取合适的实现机制. 
 
 * We define two types of "context" information that may be involved in the implementation of a ```wids``` function: backward-context and forward-context. 
 * 我们定义了两种类型的 "上下文" 信息, 在 ```wids``` 函数的实现过程中可能会涉及到对相关概念的使用: 后序-上下文信息和 先序-上下文信息. 
@@ -1000,17 +1000,35 @@ of windows of which we are aware, and which is easily extensible to other types 
 * ```wids``` 函数中用于分区的函数 ```rank``` (例如, Q4 查询语句)实质上便是需要 后序-上下文信息的一种函数表达式, 因为 ```rank``` 函数中会使用到所有到达的元组的列-数目来作为执行排序算法的属性字段; 而在像 Q3 这种以 元组-为-步长的查询语句中, 所使用到的需要知道当前元组后续到达的元组中的 RATTR 字段的数值这种需求, 在 ```wids``` 函数中便会作为需要借助于 后序-上下文信息才能实现函数中的计算.
 
 * We categorize windows into FCF(forward-context free), and FCA(forward-context aware), primarily based on their forward-context requirements (Characterizing each category is an interesting open question). 
+* 我们将窗口划分成 FCF(后序-上下文消息无感知类 和 FCA(后序-上下文消息感知) 这两种类型, 划分的依据是其窗口计算的 ```wids``` 函数是否对 forward-context/先序-上下文信息 是否有依赖
+
+```
+因为作者在前文中也提到过 backforward-context 实现起来并不需要可以地保留数据, 所以便没有将 backforward-context 作为区分窗口类型的方法. 而是用了 forward-context
+```
 
 * We define a window as FCF if the wids implementation does not require forward-context.
+* 如果窗口在对 ```wids``` 函数的实现中不需要借助于其 后序-上下文消息进行计算, 那么我们将该窗口划分到 后序-上下文消息无感知 类型. 
 
 * Time-based windows, tuple-based sliding windows, and partitioned tuple-based windows are FCF. 
+* 时间窗口, 基于元组类型的滑动窗口, 和基于元组类型的分区窗口都属于 后序-上下文消息无感知类型的窗口. 
 
 * We define a window as FCA(forward-context aware) if the wids implementation requires forward-context. 
+* 如果窗口在对 ```wids``` 函数的实现中需要借助于其 后序-上下文消息来完成计算的话，我们便将该窗口划分到 后序-上下文消息感知 类型. 
 
 * Slide-by-tuple windows and its two variations (slide by n tuples over row-num and rank(RATTR), respectively) are FCA. 
+* 以元组为步长的滑动窗口及其两种变种滑动窗口(这两个变种分别是每次滑动步长单位为 n 个元组大小, 和调用 rank 函数将元组内部元素按照 RATTR 属性字段进行排序的窗口) 将其划分到 后序-上下文消息 感知类型. 
 
-* Under the FCF category, we define a window as CF (context free) if the impl
+* Under the FCF category, we define a window as CF (context free) if the implementation of its ```wids``` mapping requires neither forward-nor backward-context. 
+* 在 FCF/后序-上下文消息无感知 窗口类型中, 如果该窗口中的 ```wids``` 函数在实现中先后序-上下文消息都不需要参加计算的话, 我们会将该类型的窗口进一步划分到 CF(上下文无感知)类型中. 
 
+* Tuple-based and time-based sliding windows are CF. 
+* 在我们常见的窗口类型中基于元组和基于时间属性的滑动窗口均属于 CF, 即, 上下文无感知类型. 
+
+* The ```wids``` function of a CF window maps each input tuple to a set of window-ids only based on the window specification and the tuple itself, and correspondingly in the implementation, window-ids for each tuple can be determined as the tuple arrives and no state needs to be maintained. 
+* CF 类型的窗口在 ```wids``` 函数的实现过程中会仅根据窗口函数和元组自身所携带的属性进行计算并以此为依据将元组投射到其所属于的一组 window-ids 所标识的 window-extent 中, 与此同时在其 ```wids``` 函数实现中, 每个元组的一组 window-id 集合能够在元组一经到达无需借助于任何缓存下来的状态信息的情况下便可以计算生成. 
+
+* We proceed to discuss the implementation details for different categories of windows.
+* 我们接下来将会深入讨论基于上述划分方式所划分出的不同类型的窗口在实现中所涉及到的细节. 
 
 ----
 文章看到这里最大的感受就是, 每篇论文在阐述概念的时候都是先举一个案例,
